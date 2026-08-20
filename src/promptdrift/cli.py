@@ -77,7 +77,6 @@ def test(
     config: Annotated[str, typer.Option("--config", "-c")] = "promptdrift.yaml",
     json_output: Annotated[bool, typer.Option("--json", help="Emit machine-readable JSON.")] = False,
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
-    all_: Annotated[bool, typer.Option("--all", help="Run all configured tests.")] = False,
 ) -> None:
     """Run behavioral contracts; automatically compares an existing baseline."""
     result = _run(config, with_baseline=True, verbose=verbose)
