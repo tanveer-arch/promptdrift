@@ -1,13 +1,23 @@
 name: Release
 on:
+  push:
+    tags: ["v*"]
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/promptdrift
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
-      - run: python -m pip install build && python -m build
+      - run: python -m pip install '.[dev]' build
+      - run: pytest && ruff check src tests
+      - run: python -m build
+      - uses: pypa/gh-action-pypi-publish@release/v1
