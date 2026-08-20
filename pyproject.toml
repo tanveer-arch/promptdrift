@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "promptdrift"
+version = "0.1.0"
+description = "CI regression testing for LLM prompts."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "PromptDrift contributors"}]
+keywords = ["llm", "prompts", "testing", "github-actions", "regression"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+]
+dependencies = [
+  "httpx>=0.27,<1",
+  "jinja2>=3.1,<4",
+  "jsonschema>=4.22,<5",
+  "pydantic>=2.7,<3",
+  "PyYAML>=6.0,<7",
+  "rich>=13.7,<14",
+  "typer>=0.12,<1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9", "pytest-cov>=5,<7", "ruff>=0.6,<1"]
+
+[project.scripts]
+promptdrift = "promptdrift.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/promptdrift"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["live: tests requiring a real configured provider"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]

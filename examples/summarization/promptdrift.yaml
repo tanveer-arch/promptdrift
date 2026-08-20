@@ -1,0 +1,9 @@
+version: 1
+provider: {type: mock, model: local-echo}
+tests:
+  - id: summary
+    prompt: prompts/summarize.txt
+    variables: {input: "PromptDrift evaluates declared LLM behavior."}
+    assertions:
+      - {type: contains, value: PromptDrift}
+      - {type: max_length, value: 200}

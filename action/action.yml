@@ -1,0 +1,89 @@
+name: PromptDrift
+description: CI regression testing for LLM prompts
+author: PromptDrift contributors
+inputs:
+  config:
+    description: Path to promptdrift.yaml
+    required: false
+    default: promptdrift.yaml
+  working-directory:
+    description: Directory in which to run PromptDrift
+    required: false
+    default: .
+  version:
+    description: PromptDrift package version or spec
+    required: false
+    default: promptdrift
+  upload-report:
+    description: Generate a JSON report file for later artifact upload
+    required: false
+    default: 'true'
+  comment:
+    description: Update a single marked PR comment (only same-repository pull requests)
+    required: false
+    default: 'false'
+outputs:
+  result:
+    description: PromptDrift JSON report path
+    value: ${{ steps.run.outputs.result }}
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      id: run
+      env:
+        PROMPTDRIFT_CONFIG: ${{ inputs.config }}
+      run: |
+        python -m pip install --disable-pip-version-check "${{ inputs.version }}"
+        set +e
+        promptdrift diff --config "$PROMPTDRIFT_CONFIG" --json > promptdrift-report.json
+        status=$?
+        set -e
+        python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+        import json
+        report = json.load(open("promptdrift-report.json", encoding="utf-8"))
+        counts = {key: 0 for key in ("PASS", "WARN", "FAIL")}
+        print("## PromptDrift\n")
+        print("| Test | Status | Reason |\n|---|---|---|")
+        for test in report["tests"]:
+            counts[test["status"]] += 1
+            failure = next((item for item in test["evaluations"] if not item["passed"]), None)
+            print(f"| {test['test_id']} | {test['status']} | {failure['reason'] if failure else 'All assertions passed'} |")
+        print(f"\n{counts['PASS']} passed · {counts['WARN']} warnings · {counts['FAIL']} failed")
+        PY
+        echo "result=promptdrift-report.json" >> "$GITHUB_OUTPUT"
+        echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+    - name: Upload PromptDrift report
+      if: ${{ always() && inputs.upload-report == 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: promptdrift-report
+        path: ${{ inputs.working-directory }}/promptdrift-report.json
+        if-no-files-found: error
+    - name: Update PR comment
+      if: ${{ always() && inputs.comment == 'true' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false }}
+      uses: actions/github-script@v7
+      env:
+        PROMPTDRIFT_REPORT: ${{ steps.run.outputs.result }}
+      with:
+        script: |
+          const fs = require('fs');
+          const data = JSON.parse(fs.readFileSync(process.env.PROMPTDRIFT_REPORT, 'utf8'));
+          const icon = { PASS: '✅', WARN: '⚠️', FAIL: '❌' };
+          const counts = data.tests.reduce((a, t) => (a[t.status]++, a), {PASS: 0, WARN: 0, FAIL: 0});
+          const rows = data.tests.map(t => {
+            const failed = t.evaluations.find(e => !e.passed);
+            return `| ${t.test_id} | ${icon[t.status]} | ${failed ? failed.reason : 'All assertions passed'} |`;
+          });
+          const body = ['<!-- promptdrift-report -->', '## PromptDrift', '', counts.FAIL ? '❌ Regression detected' : '✅ All contracts passed', '', '| Test | Status | Reason |', '|---|---|---|', ...rows, '', `### Summary`, '', `${counts.PASS} passed · ${counts.WARN} warnings · ${counts.FAIL} failed`].join('\n');
+          const { owner, repo } = context.repo;
+          const issue_number = context.issue.number;
+          const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number});
+          const existing = comments.find(c => c.user.type === 'Bot' && c.body.includes('<!-- promptdrift-report -->'));
+          if (existing) await github.rest.issues.updateComment({owner, repo, comment_id: existing.id, body});
+          else await github.rest.issues.createComment({owner, repo, issue_number, body});
+    - name: Enforce PromptDrift result
+      if: ${{ always() && steps.run.outputs.exit_code != '0' }}
+      shell: bash
+      run: exit "${{ steps.run.outputs.exit_code }}"

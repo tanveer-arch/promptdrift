@@ -1,0 +1,20 @@
+version: 1
+provider:
+  type: openai
+  model: gpt-4.1-mini
+  api_key_env: OPENAI_API_KEY
+defaults:
+  temperature: 0
+  max_output_tokens: 500
+baseline:
+  path: promptdrift.baseline.json
+ci:
+  fail_on: [assertion_failure]
+  warn_on: [semantic_change, latency_regression]
+tests:
+  - id: example
+    prompt: prompts/example.txt
+    variables: {input: "Hello"}
+    assertions:
+      - type: contains
+        value: Hello

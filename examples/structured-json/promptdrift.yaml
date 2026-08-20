@@ -1,0 +1,13 @@
+version: 1
+provider: {type: mock, model: local-echo}
+tests:
+  - id: json_contract
+    prompt: prompts/response.json
+    assertions:
+      - type: json_schema
+        schema:
+          type: object
+          required: [answer, escalation_required]
+          properties:
+            answer: {type: string}
+            escalation_required: {type: boolean}

@@ -1,0 +1,9 @@
+version: 1
+provider: {type: mock, model: local-echo}
+tests:
+  - id: refund_request
+    prompt: prompts/support.txt
+    variables: {policy: "Refunds are available within 30 days.", question: "Can I get a refund?"}
+    assertions:
+      - {type: contains, value: "30 days"}
+      - {type: not_contains, value: guaranteed}
