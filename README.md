@@ -1,8 +1,8 @@
 # PromptDrift
 
 [![CI](https://github.com/tanveer-arch/promptdrift/actions/workflows/ci.yml/badge.svg)](https://github.com/tanveer-arch/promptdrift/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/promptdrift?color=blue)](https://pypi.org/project/promptdrift/)
-[![Python](https://img.shields.io/pypi/pyversions/promptdrift)](https://pypi.org/project/promptdrift/)
+[![PyPI](https://img.shields.io/pypi/v/promptdrift-ci?color=blue)](https://pypi.org/project/promptdrift-ci/)
+[![Python](https://img.shields.io/pypi/pyversions/promptdrift-ci)](https://pypi.org/project/promptdrift-ci/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ### CI regression testing for LLM prompts.
@@ -30,7 +30,7 @@ prompt change  →  PromptDrift  →  behavioral contracts  →  PR check
 ## Quick Start
 
 ```bash
-pip install promptdrift
+pip install promptdrift-ci
 promptdrift init
 promptdrift test
 ```

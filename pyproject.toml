@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "promptdrift"
+name = "promptdrift-ci"
 version = "0.1.0"
 description = "CI regression testing for LLM prompts."
 readme = "README.md"
