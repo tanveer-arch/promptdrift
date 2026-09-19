@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Capture & Learn:** Automatically log example interactions and cluster them into candidate scenarios (`capture`, `learn`).
 - **Assertion Suggestions:** Automatically generate deterministic contracts from captured interaction traces (`suggest`).
 - **Scenario Management:** Local Git-tracked library (`.promptdrift/scenarios.json`) for promoting scenarios to the active regression suite (`scenarios`, `promote`).
-- **Semantic Evaluators:** Support for `semantic_similarity`, `sentiment`, `toxicity`, `hallucination`, and `classification` via LLM-as-a-judge.
+- **Semantic Evaluators:** Support for basic `semantic_similarity` and a protocol for custom evaluation plugins.
 - **Enhanced Action:** GitHub Action now natively supports Impact Radius reporting and intelligent PR commenting.
 - **Safe baselines:** `accept` now prompts for confirmation before overwriting baselines.
 
