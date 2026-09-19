@@ -1,5 +1,5 @@
 name: PromptDrift
-description: CI regression testing for LLM prompts
+description: CI regression testing for LLM prompts with Impact Radius analysis
 author: PromptDrift contributors
 inputs:
   config:
@@ -13,7 +13,11 @@ inputs:
   version:
     description: PromptDrift package version or spec
     required: false
-    default: promptdrift
+    default: promptdrift-ci
+  base-ref:
+    description: Git base ref for selective check (e.g. origin/main). Auto-detected on PRs.
+    required: false
+    default: ''
   upload-report:
     description: Generate a JSON report file for later artifact upload
     required: false
@@ -34,23 +38,52 @@ runs:
       id: run
       env:
         PROMPTDRIFT_CONFIG: ${{ inputs.config }}
+        BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || '' }}
       run: |
         python -m pip install --disable-pip-version-check "${{ inputs.version }}"
+        BASE_ARG=""
+        if [ -n "$BASE_REF" ]; then
+          BASE_ARG="--base $BASE_REF"
+        fi
         set +e
-        promptdrift diff --config "$PROMPTDRIFT_CONFIG" --json > promptdrift-report.json
+        promptdrift check --config "$PROMPTDRIFT_CONFIG" $BASE_ARG --json > promptdrift-report.json
         status=$?
         set -e
         python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
         import json
-        report = json.load(open("promptdrift-report.json", encoding="utf-8"))
-        counts = {key: 0 for key in ("PASS", "WARN", "FAIL")}
+        data = json.load(open("promptdrift-report.json", encoding="utf-8"))
+        impact = data.get("impact", {})
+        report = data.get("report", {})
+        total = impact.get("total_scenarios", 0)
+        regressed = impact.get("regressed", 0)
+        improved = impact.get("improved", 0)
+        unchanged = impact.get("unchanged", 0)
+        changed_valid = impact.get("changed_but_valid", 0)
+        not_eval = impact.get("not_evaluated", 0)
+        radius = impact.get("impact_radius_percentage", 0)
+        lat_pct = impact.get("latency_pct_change", 0)
+        cost_pct = impact.get("cost_pct_change", 0)
+        verdict = f"⚠️ {regressed} regression(s) detected" if regressed else "✅ No behavioral regressions"
         print("## PromptDrift\n")
-        print("| Test | Status | Reason |\n|---|---|---|")
-        for test in report["tests"]:
-            counts[test["status"]] += 1
-            failure = next((item for item in test["evaluations"] if not item["passed"]), None)
-            print(f"| {test['test_id']} | {test['status']} | {failure['reason'] if failure else 'All assertions passed'} |")
-        print(f"\n{counts['PASS']} passed · {counts['WARN']} warnings · {counts['FAIL']} failed")
+        print(verdict)
+        print()
+        print("| Metric | Value |")
+        print("|---|---|")
+        print(f"| Impact radius | {radius}% |")
+        print(f"| Scenarios evaluated | {total - not_eval} / {total} |")
+        print(f"| Regressed | {regressed} |")
+        print(f"| Improved | {improved} |")
+        print(f"| Unchanged | {unchanged} |")
+        print(f"| Changed but valid | {changed_valid} |")
+        if not_eval:
+            print(f"| Not evaluated (unaffected) | {not_eval} |")
+        print(f"| Latency change | {lat_pct:+.1f}% |")
+        print(f"| Cost change | {cost_pct:+.1f}% |")
+        regressions = [s for s in impact.get("scenarios", []) if s.get("classification") == "REGRESSED"]
+        if regressions:
+            print("\n### Regressions\n")
+            for s in regressions:
+                print(f"- `{s['scenario_id']}` — {s.get('details', '')}")
         PY
         echo "result=promptdrift-report.json" >> "$GITHUB_OUTPUT"
         echo "exit_code=$status" >> "$GITHUB_OUTPUT"
@@ -70,13 +103,35 @@ runs:
         script: |
           const fs = require('fs');
           const data = JSON.parse(fs.readFileSync(process.env.PROMPTDRIFT_REPORT, 'utf8'));
-          const icon = { PASS: '✅', WARN: '⚠️', FAIL: '❌' };
-          const counts = data.tests.reduce((a, t) => (a[t.status]++, a), {PASS: 0, WARN: 0, FAIL: 0});
-          const rows = data.tests.map(t => {
-            const failed = t.evaluations.find(e => !e.passed);
-            return `| ${t.test_id} | ${icon[t.status]} | ${failed ? failed.reason : 'All assertions passed'} |`;
-          });
-          const body = ['<!-- promptdrift-report -->', '## PromptDrift', '', counts.FAIL ? '❌ Regression detected' : '✅ All contracts passed', '', '| Test | Status | Reason |', '|---|---|---|', ...rows, '', `### Summary`, '', `${counts.PASS} passed · ${counts.WARN} warnings · ${counts.FAIL} failed`].join('\n');
+          const impact = data.impact || {};
+          const total = impact.total_scenarios || 0;
+          const notEval = impact.not_evaluated || 0;
+          const evaluated = total - notEval;
+          const verdict = impact.regressed > 0
+            ? `⚠️ ${impact.regressed} behavioral regression${impact.regressed > 1 ? 's' : ''} detected`
+            : '✅ No behavioral regressions detected';
+          const rows = [
+            `| Impact radius | ${impact.impact_radius_percentage}% |`,
+            `| Scenarios evaluated | ${evaluated} / ${total} |`,
+            `| Regressed | ${impact.regressed} |`,
+            `| Improved | ${impact.improved} |`,
+            `| Unchanged | ${impact.unchanged} |`,
+            `| Changed but valid | ${impact.changed_but_valid} |`,
+          ];
+          if (notEval) rows.push(`| Not evaluated (unaffected) | ${notEval} |`);
+          rows.push(`| Latency change | ${(impact.latency_pct_change >= 0 ? '+' : '')}${impact.latency_pct_change.toFixed(1)}% |`);
+          rows.push(`| Cost change | ${(impact.cost_pct_change >= 0 ? '+' : '')}${impact.cost_pct_change.toFixed(1)}% |`);
+          const regressions = (impact.scenarios || []).filter(s => s.classification === 'REGRESSED');
+          const regSection = regressions.length
+            ? ['### Regressions', '', ...regressions.map(s => `- \`${s.scenario_id}\` — ${s.details || ''}`), '']
+            : [];
+          const body = [
+            '<!-- promptdrift-report -->',
+            '## PromptDrift', '', verdict, '',
+            '| Metric | Value |', '|---|---|',
+            ...rows, '',
+            ...regSection,
+          ].join('\n');
           const { owner, repo } = context.repo;
           const issue_number = context.issue.number;
           const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number});

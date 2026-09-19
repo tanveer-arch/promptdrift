@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "scenarios": [
+    {
+      "id": "support_how_do_i_cancel_my_o",
+      "prompt": "prompts/example.txt",
+      "input": "How do I cancel my order?",
+      "variables": {},
+      "category": "support",
+      "tags": [
+        "support"
+      ],
+      "source": "capture",
+      "status": "promoted",
+      "assertions": [
+        {
+          "type": "min_length",
+          "value": 29,
+          "schema_": null,
+          "name": null,
+          "severity": "fail"
+        },
+        {
+          "type": "max_length",
+          "value": 79,
+          "schema_": null,
+          "name": null,
+          "severity": "warn"
+        }
+      ],
+      "thresholds": {},
+      "created_at": "2026-09-19T11:15:34.536268Z"
+    }
+  ]
+}

@@ -25,6 +25,10 @@ def print_impact_report(report: ImpactRadiusReport, console: Console | None = No
         console.print(f"  [blue]+ {report.new_scenarios} new[/blue]")
     if report.missing_scenarios > 0:
         console.print(f"  [magenta]- {report.missing_scenarios} missing[/magenta]")
+    if report.not_evaluated > 0:
+        console.print(
+            f"  [dim]⏭ {report.not_evaluated} not evaluated (unaffected by this change)[/dim]"
+        )
 
     console.print()
     console.print(f"[bold]Impact radius:[/] {report.impact_radius_percentage}%")

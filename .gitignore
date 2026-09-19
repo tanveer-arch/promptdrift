@@ -6,7 +6,8 @@ __pycache__/
 dist/
 build/
 *.egg-info/
-.promptdrift/
+.promptdrift/*.db
+.promptdrift/*.sqlite
 promptdrift-report.html
 *.db
 .venv/

@@ -40,10 +40,11 @@ promptdrift init
 
 PromptDrift scans your repository context and sets up starter files.
 
-### 1. Capture real or example interactions
+### 1. Log example interactions
 ```bash
 promptdrift capture --input "How do I cancel my order?" --output "You can cancel within 24 hours."
 ```
+*(Note: PromptDrift currently logs interactions via explicit CLI input. Automatic SDK/proxy capture is planned for a future release.)*
 
 ### 2. Turn captures into candidate regression scenarios
 ```bash
@@ -155,7 +156,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: tanveer-arch/promptdrift/action@v1
+      - uses: tanveer-arch/promptdrift/action@main  # Change to @v1 upon stable release
         with:
           config: promptdrift.yaml
           comment: 'true'

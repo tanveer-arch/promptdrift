@@ -4,6 +4,18 @@ All notable changes to PromptDrift are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-09-19
+
+### Added
+
+- **Impact Radius:** Measure the exact blast radius of prompt changes using Git-aware selective execution (`check --base`).
+- **Capture & Learn:** Automatically log example interactions and cluster them into candidate scenarios (`capture`, `learn`).
+- **Assertion Suggestions:** Automatically generate deterministic contracts from captured interaction traces (`suggest`).
+- **Scenario Management:** Local Git-tracked library (`.promptdrift/scenarios.json`) for promoting scenarios to the active regression suite (`scenarios`, `promote`).
+- **Semantic Evaluators:** Support for `semantic_similarity`, `sentiment`, `toxicity`, `hallucination`, and `classification` via LLM-as-a-judge.
+- **Enhanced Action:** GitHub Action now natively supports Impact Radius reporting and intelligent PR commenting.
+- **Safe baselines:** `accept` now prompts for confirmation before overwriting baselines.
+
 ## [0.1.0] - 2026-08-20
 
 ### Added

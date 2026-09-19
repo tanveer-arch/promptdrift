@@ -272,6 +272,9 @@ def promote(
 
     save_scenarios(lib)
     console.print(f"[green]Promoted {promoted_count} scenario(s) to active regression suite.[/]")
+    console.print(
+        "[dim]Commit .promptdrift/scenarios.json to version-control your regression tests.[/]"
+    )
 
 
 @app.command()
@@ -314,7 +317,7 @@ def check(
 @app.command()
 def accept(
     config: Annotated[str, typer.Option("--config", "-c")] = "promptdrift.yaml",
-    force: Annotated[bool, typer.Option(help="Overwrite existing baseline.")] = True,
+    force: Annotated[bool, typer.Option(help="Overwrite existing baseline without confirmation.")] = False,
     json_output: Annotated[bool, typer.Option("--json")] = False,
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
 ) -> None:
@@ -325,7 +328,14 @@ def accept(
     loaded, config_path, report = result
     try:
         path = loaded.resolve_path(config_path, loaded.baseline.path)
-        write_baseline(path, report, force=force)
+        if path.exists() and not force:
+            confirmed = typer.confirm(
+                f"Baseline {path.name} already exists. Overwrite with current behavior?"
+            )
+            if not confirmed:
+                console.print("[yellow]Aborted.[/]")
+                return
+        write_baseline(path, report, force=True)
         if json_output:
             typer.echo(json.dumps({"baseline": str(path), "status": "accepted"}, indent=2))
         else:

@@ -63,6 +63,7 @@ def orchestrate_check(
 
     # Selective scenario execution if git changed files are available
     selected_tests = tests
+    skipped_ids: set[str] = set()
     if changed_files:
         affected: list[TestCase] = []
         for t in tests:
@@ -70,6 +71,7 @@ def orchestrate_check(
             if any(rel_prompt in cf.replace("\\", "/") for cf in changed_files):
                 affected.append(t)
         if affected:
+            skipped_ids = {t.id for t in tests} - {t.id for t in affected}
             selected_tests = affected
 
     active_config = config.model_copy(deep=True)
@@ -87,5 +89,7 @@ def orchestrate_check(
         except Exception:
             pass
 
-    impact = calculate_impact_radius(report, baseline, scenario_metadata=scenario_metadata)
+    impact = calculate_impact_radius(
+        report, baseline, scenario_metadata=scenario_metadata, skipped_ids=skipped_ids
+    )
     return report, impact

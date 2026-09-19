@@ -17,6 +17,7 @@ ChangeClassification = Literal[
     "CHANGED_BUT_VALID",
     "NEW",
     "MISSING",
+    "NOT_EVALUATED",
 ]
 
 
@@ -43,6 +44,7 @@ class ImpactRadiusReport(BaseModel):
     changed_but_valid: int
     new_scenarios: int
     missing_scenarios: int
+    not_evaluated: int = 0
     impact_radius_percentage: float
     latency_pct_change: float = 0.0
     cost_pct_change: float = 0.0
@@ -137,8 +139,10 @@ def calculate_impact_radius(
     report: RegressionReport,
     baseline: Baseline | None,
     scenario_metadata: dict[str, dict[str, Any]] | None = None,
+    skipped_ids: set[str] | None = None,
 ) -> ImpactRadiusReport:
     scenario_metadata = scenario_metadata or {}
+    skipped_ids = skipped_ids or set()
     scenarios: list[ScenarioImpact] = []
 
     current_ids = {t.test_id for t in report.tests}
@@ -155,20 +159,32 @@ def calculate_impact_radius(
         if impact.classification in ("REGRESSED", "IMPROVED", "CHANGED_BUT_VALID"):
             category_breakdown[category] = category_breakdown.get(category, 0) + 1
 
-    # Check for missing scenarios in baseline
+    # Check for missing or skipped scenarios in baseline
     if baseline:
         for base_id, base_test in baseline.tests.items():
             if base_id not in current_ids:
-                scenarios.append(
-                    ScenarioImpact(
-                        scenario_id=base_id,
-                        classification="MISSING",
-                        baseline_status=base_test.status,
-                        current_status="MISSING",
-                        output_changed=True,
-                        details="Scenario present in baseline was omitted or deleted.",
+                if base_id in skipped_ids:
+                    scenarios.append(
+                        ScenarioImpact(
+                            scenario_id=base_id,
+                            classification="NOT_EVALUATED",
+                            baseline_status=base_test.status,
+                            current_status="NOT_EVALUATED",
+                            output_changed=False,
+                            details="Unaffected by this change; not re-evaluated.",
+                        )
                     )
-                )
+                else:
+                    scenarios.append(
+                        ScenarioImpact(
+                            scenario_id=base_id,
+                            classification="MISSING",
+                            baseline_status=base_test.status,
+                            current_status="MISSING",
+                            output_changed=True,
+                            details="Scenario present in baseline was omitted or deleted.",
+                        )
+                    )
 
     counts = {
         "REGRESSED": sum(1 for s in scenarios if s.classification == "REGRESSED"),
@@ -177,11 +193,13 @@ def calculate_impact_radius(
         "CHANGED_BUT_VALID": sum(1 for s in scenarios if s.classification == "CHANGED_BUT_VALID"),
         "NEW": sum(1 for s in scenarios if s.classification == "NEW"),
         "MISSING": sum(1 for s in scenarios if s.classification == "MISSING"),
+        "NOT_EVALUATED": sum(1 for s in scenarios if s.classification == "NOT_EVALUATED"),
     }
 
     total = len(scenarios)
+    evaluated_total = total - counts["NOT_EVALUATED"]
     affected = counts["REGRESSED"] + counts["IMPROVED"] + counts["CHANGED_BUT_VALID"]
-    impact_pct = round((affected / total) * 100, 1) if total > 0 else 0.0
+    impact_pct = round((affected / evaluated_total) * 100, 1) if evaluated_total > 0 else 0.0
 
     # Calculate overall latency and cost deltas
     total_curr_lat = sum(r.latency_ms for r in report.tests)
@@ -215,6 +233,7 @@ def calculate_impact_radius(
         changed_but_valid=counts["CHANGED_BUT_VALID"],
         new_scenarios=counts["NEW"],
         missing_scenarios=counts["MISSING"],
+        not_evaluated=counts["NOT_EVALUATED"],
         impact_radius_percentage=impact_pct,
         latency_pct_change=lat_pct,
         cost_pct_change=cost_pct,
