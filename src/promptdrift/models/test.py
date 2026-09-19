@@ -1,4 +1,5 @@
 """Models representing declarative test contracts."""
+
 from __future__ import annotations
 
 from typing import Any, Literal
@@ -6,16 +7,36 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 ASSERTION_TYPES = {
-    "exact_match", "contains", "not_contains", "regex", "not_regex", "json_valid",
-    "json_schema", "min_length", "max_length", "max_tokens", "latency_ms", "cost_usd",
+    "exact_match",
+    "contains",
+    "not_contains",
+    "regex",
+    "not_regex",
+    "json_valid",
+    "json_schema",
+    "min_length",
+    "max_length",
+    "max_tokens",
+    "latency_ms",
+    "cost_usd",
 }
 
 
 class Assertion(BaseModel):
     model_config = ConfigDict(extra="forbid")
     type: Literal[
-        "exact_match", "contains", "not_contains", "regex", "not_regex", "json_valid",
-        "json_schema", "min_length", "max_length", "max_tokens", "latency_ms", "cost_usd",
+        "exact_match",
+        "contains",
+        "not_contains",
+        "regex",
+        "not_regex",
+        "json_valid",
+        "json_schema",
+        "min_length",
+        "max_length",
+        "max_tokens",
+        "latency_ms",
+        "cost_usd",
     ]
     value: Any | None = None
     schema_: dict[str, Any] | None = Field(default=None, alias="schema")
@@ -37,6 +58,7 @@ class Assertion(BaseModel):
 
 class Evaluator(BaseModel):
     """Reserved model for a future explicit probabilistic evaluator extension."""
+
     model_config = ConfigDict(extra="forbid")
     type: Literal["semantic_similarity", "llm_judge", "similarity"]
     threshold: float | None = Field(default=None, ge=0, le=1)
@@ -63,7 +85,9 @@ class TestCase(BaseModel):
     assertions: list[Assertion] = Field(default_factory=list)
     evaluators: list[Evaluator] = Field(default_factory=list)
     output: OutputConfig = Field(default_factory=OutputConfig)
-    thresholds: dict[Literal["latency_ms", "cost_usd"], Threshold | float] = Field(default_factory=dict)
+    thresholds: dict[Literal["latency_ms", "cost_usd"], Threshold | float] = Field(
+        default_factory=dict
+    )
 
     @model_validator(mode="after")
     def reject_unimplemented_evaluators(self) -> TestCase:

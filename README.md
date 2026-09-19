@@ -5,51 +5,110 @@
 [![Python](https://img.shields.io/pypi/pyversions/promptdrift-ci)](https://pypi.org/project/promptdrift-ci/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-### CI regression testing for LLM prompts.
+> **Git-native AI behavior change detection.**
 
-**Catch AI behavior regressions before they reach production.**
+### Change a prompt. PromptDrift automatically shows what changed in AI behavior, what broke, what improved, and whether the change is safe to merge.
 
-PromptDrift turns the behavior you need from a prompt into explicit, reviewable contracts. When a prompt changes, it runs those contracts in CI and tells you exactly what broke — without treating every wording change as a regression.
+PromptDrift turns your real application traffic and prompt changes into automatic regression coverage with **Impact Radius analysis**, without requiring manual authoring of dozens of YAML tests.
 
 ```text
-prompt change  →  PromptDrift  →  behavioral contracts  →  PR check
-                                                        ↳ PASS · WARN · FAIL
+application / prompt / traffic
+          ↓
+      discovery
+          ↓
+   scenario library
+          ↓
+   baseline behavior
+          ↓
+ prompt change detected
+          ↓
+ replay + evaluation
+          ↓
+ regression analysis
+          ↓
+ GitHub PR / CLI report
 ```
 
-## Why PromptDrift?
+---
 
-`git diff` tells you what changed in the prompt text. **PromptDrift tells you whether the AI behavior changed in a way that matters.**
-
-| Problem | PromptDrift's answer |
-| --- | --- |
-| "We changed a prompt and broke 3 customer flows" | Behavioral contracts catch regressions before merge |
-| "Every LLM output is different — how do I test that?" | Test structure and constraints, not exact wording |
-| "Our prompt tests are flaky because they diff raw output" | Contracts pass/fail deterministically on semantics |
-| "We have no idea if a prompt change is safe to deploy" | CI gives a clear PASS/FAIL on every PR |
-
-## Quick Start
+## 3-Minute Quick Start
 
 ```bash
 pip install promptdrift-ci
 promptdrift init
-promptdrift test
 ```
 
-`init` creates a fully local example using the deterministic `mock` provider. No API key needed — validate the workflow first, then connect OpenAI or Ollama.
+PromptDrift scans your repository context and sets up starter files.
 
-Capture approved behavior:
+### 1. Capture real or example interactions
+```bash
+promptdrift capture --input "How do I cancel my order?" --output "You can cancel within 24 hours."
+```
 
+### 2. Turn captures into candidate regression scenarios
+```bash
+promptdrift learn
+```
+
+### 3. Review and promote scenarios to the active suite
+```bash
+promptdrift scenarios
+promptdrift suggest cancellation_how_do_i_cancel
+promptdrift promote cancellation_how_do_i_cancel
+```
+
+### 4. Create your baseline
 ```bash
 promptdrift baseline
-git add promptdrift.baseline.json
 ```
 
-## Define Behavioral Contracts
+### 5. Run Git-aware check
+```bash
+promptdrift check
+```
 
-`promptdrift.yaml` stays small, readable, and version-controlled:
+---
+
+## Impact Radius & Behavioral Change Report
+
+When you modify your prompt templates and run `promptdrift check`:
+
+```text
+PromptDrift Impact Report
+Behavior changed in 8 / 43 scenarios.
+
+  ✓ 5 improved
+  ⚪ 35 unchanged
+  💬 17 changed but valid
+  ✗ 3 regressed
+
+Impact radius: 18.6%
+Latency change: +7.2%
+Cost change:    +11.3%
+
+Affected Categories:
+  Refunds          5 affected
+  Cancellation     2 affected
+  Escalation       1 affected
+
+Regressions:
+  ✗ refund_request
+    Required policy condition failed: 30 days window missing.
+  ✗ cancellation_001
+    JSON schema failed: 'order_id' is a required property.
+```
+
+---
+
+## Define Explicit Behavioral Contracts (Advanced Mode)
+
+You can always define explicit behavioral contracts in `promptdrift.yaml`:
 
 ```yaml
-version: 1
+version: 2
+
+project:
+  name: support-bot
 
 provider:
   type: openai
@@ -71,34 +130,15 @@ tests:
         value: 600
 ```
 
-```text
-❌ FAIL refund_request
-
-Assertion: contains
-Expected: 30 days
-Actual:   You may be eligible for a refund.
-Reason:   Required text does not appear in the output.
-```
-
-## Contracts, Not Cosmetic Diffs
-
-| PromptDrift fails when… | PromptDrift does **not** fail just because… |
-| --- | --- |
-| Required text disappears | Wording changes |
-| Forbidden content appears | Sentence order changes |
-| JSON is invalid or violates its schema | An otherwise-valid answer is phrased differently |
-| A length, token, latency, or cost limit is exceeded | Output hashes differ but contracts still pass |
-
-### Built-in Assertions
-
+### Built-in Deterministic Assertions
 `exact_match` · `contains` · `not_contains` · `regex` · `not_regex` · `json_valid` · `json_schema` · `min_length` · `max_length` · `max_tokens` · `latency_ms` · `cost_usd`
 
-Each assertion supports `severity: warn` for non-blocking warnings.
+---
 
-## Run in CI
+## GitHub Action & PR Workflow
 
 ```yaml
-name: PromptDrift
+name: PromptDrift Check
 
 on:
   pull_request:
@@ -108,6 +148,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   promptdrift:
@@ -117,73 +158,44 @@ jobs:
       - uses: tanveer-arch/promptdrift/action@v1
         with:
           config: promptdrift.yaml
+          comment: 'true'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
 
-The Action writes a Step Summary, uploads a JSON report, and fails only after reports are available. For PR comments, add `comment: 'true'` and grant `pull-requests: write`.
+---
 
-> **Security:** Use `pull_request` for untrusted forks. Never expose provider secrets with `pull_request_target` while executing code from a pull request.
+## Complete CLI Command Suite
 
-## Commands
-
-| Command | What it does |
+| Command | Description |
 | --- | --- |
-| `promptdrift init` | Creates an offline starter suite |
-| `promptdrift test` | Runs contracts; auto-compares against baseline |
-| `promptdrift baseline` | Captures approved behavior (requires `--force` to replace) |
-| `promptdrift diff` | Runs and compares current output with baseline |
-| `promptdrift report` | Generates an offline HTML report |
-| `promptdrift doctor` | Checks config, files, keys, and baseline health |
-| `promptdrift version` | Prints the installed version |
+| `promptdrift init` | Zero-config setup detecting Git context and prompts |
+| `promptdrift capture` | Log application interactions into local storage |
+| `promptdrift learn` | Cluster captured interactions into regression candidates |
+| `promptdrift scenarios` | List and inspect the local scenario library |
+| `promptdrift suggest` | Suggest deterministic contracts for discovered scenarios |
+| `promptdrift promote` | Promote candidate scenarios into committed regression tests |
+| `promptdrift check` | Git-aware scenario execution and Impact Radius report |
+| `promptdrift accept` | Accept intentional behavior updates as the new baseline |
+| `promptdrift test` | Run behavioral contracts suite (backward compatible) |
+| `promptdrift baseline` | Capture canonical version-controlled baseline |
+| `promptdrift diff` | Compare current behavior against baseline |
+| `promptdrift report` | Generate offline HTML report |
+| `promptdrift purge` | Clear all local capture data |
+| `promptdrift doctor` | Validate config, prerequisites, and privacy status |
+| `promptdrift version` | Print version |
 
-All commands support `--json` for machine-readable output. Exit codes: `0` success, `1` behavioral failure, `2` config/usage error, `3` provider/runtime error.
-
-## Architecture
-
-```
-promptdrift.yaml ─→ Config ─→ Template ─→ Provider ─→ Evaluator ─→ Report
-                     Loader    Renderer    Adapter     Engine       Formatter
-                                                        │
-                                                  Baseline ←── Git
-                                                  Comparison
-```
-
-- **Providers** are isolated adapters (OpenAI, Ollama, Mock) — adding one is a single file
-- **Assertions** are pure, deterministic functions — same input always produces the same result
-- **Baselines** store hashes and metrics, never raw outputs or secrets
-- **Reports** output to terminal, JSON, HTML, or GitHub PR comments
+---
 
 ## Privacy by Default
 
-- **No telemetry, accounts, or hosted service**
-- Prompt content goes only to the provider you configure
-- API keys are environment variables — never config values
-- Baselines contain hashes and metrics, not raw outputs
-- Local SQLite history suppresses prompts and outputs by default
+- **No telemetry, tracking, or cloud accounts**
+- Prompts are evaluated against the provider you configure
+- Captured traffic remains local in SQLite and is excluded from Git by default
+- Baseline files store hashes and metrics, never raw user inputs or prompt secrets
+- Clean wipe available at any time via `promptdrift purge`
 
-## Documentation
-
-| Guide | Description |
-| --- | --- |
-| [Getting Started](docs/getting-started.md) | Install, first run, and connecting a provider |
-| [Configuration](docs/configuration.md) | Full `promptdrift.yaml` reference |
-| [Assertions](docs/assertions.md) | All contract types with examples |
-| [Providers](docs/providers.md) | OpenAI, Ollama, and Mock setup |
-| [Baselines](docs/baselines.md) | Create, compare, and update baselines |
-| [GitHub Action](docs/github-action.md) | CI setup, secrets, and fork security |
-| [Architecture](docs/architecture.md) | Module design and data flow |
-| [FAQ](docs/faq.md) | Common questions and troubleshooting |
-| [Contributing](CONTRIBUTING.md) | Dev setup, testing, and PR process |
-
-## Roadmap
-
-- [ ] Semantic similarity assertions (embedding-based)
-- [ ] LLM-as-judge evaluator
-- [ ] Multi-provider comparison (same prompt, different models)
-- [ ] Parallel test execution
-- [ ] PyPI trusted publisher release
-- [ ] Cost tracking dashboard
+---
 
 ## License
 

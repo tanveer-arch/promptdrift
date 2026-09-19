@@ -1,4 +1,5 @@
 """Comprehensive tests for all deterministic assertion evaluators."""
+
 import pytest
 
 from promptdrift.errors import EvaluationError
@@ -9,12 +10,17 @@ from promptdrift.models.test import Assertion
 
 def response(text="hello world", latency_ms=12, output_tokens=2, cost=0.001):
     return ModelResponse(
-        output=text, latency_ms=latency_ms, model="test", provider="mock",
-        output_tokens=output_tokens, estimated_cost_usd=cost,
+        output=text,
+        latency_ms=latency_ms,
+        model="test",
+        provider="mock",
+        output_tokens=output_tokens,
+        estimated_cost_usd=cost,
     )
 
 
 # --- exact_match ---
+
 
 class TestExactMatch:
     def test_passes_on_identical_text(self):
@@ -40,12 +46,15 @@ class TestExactMatch:
 
 # --- contains ---
 
+
 class TestContains:
     def test_passes_when_substring_present(self):
         assert evaluate_assertion(Assertion(type="contains", value="hello"), response()).passed
 
     def test_fails_when_substring_absent(self):
-        assert not evaluate_assertion(Assertion(type="contains", value="goodbye"), response()).passed
+        assert not evaluate_assertion(
+            Assertion(type="contains", value="goodbye"), response()
+        ).passed
 
     def test_is_case_sensitive(self):
         assert not evaluate_assertion(Assertion(type="contains", value="HELLO"), response()).passed
@@ -54,26 +63,36 @@ class TestContains:
         assert evaluate_assertion(Assertion(type="contains", value=""), response()).passed
 
     def test_works_with_numeric_value(self):
-        assert evaluate_assertion(Assertion(type="contains", value=42), response("The answer is 42")).passed
+        assert evaluate_assertion(
+            Assertion(type="contains", value=42), response("The answer is 42")
+        ).passed
 
     def test_works_with_unicode(self):
-        assert evaluate_assertion(Assertion(type="contains", value="日本"), response("Welcome to 日本語")).passed
+        assert evaluate_assertion(
+            Assertion(type="contains", value="日本"), response("Welcome to 日本語")
+        ).passed
 
 
 # --- not_contains ---
 
+
 class TestNotContains:
     def test_passes_when_forbidden_text_absent(self):
-        assert evaluate_assertion(Assertion(type="not_contains", value="goodbye"), response()).passed
+        assert evaluate_assertion(
+            Assertion(type="not_contains", value="goodbye"), response()
+        ).passed
 
     def test_fails_when_forbidden_text_present(self):
-        assert not evaluate_assertion(Assertion(type="not_contains", value="hello"), response()).passed
+        assert not evaluate_assertion(
+            Assertion(type="not_contains", value="hello"), response()
+        ).passed
 
     def test_empty_forbidden_string_always_fails(self):
         assert not evaluate_assertion(Assertion(type="not_contains", value=""), response()).passed
 
 
 # --- regex ---
+
 
 class TestRegex:
     def test_passes_on_match(self):
@@ -95,6 +114,7 @@ class TestRegex:
 
 # --- not_regex ---
 
+
 class TestNotRegex:
     def test_passes_when_pattern_absent(self):
         result = evaluate_assertion(Assertion(type="not_regex", value=r"\d{5}"), response())
@@ -111,13 +131,16 @@ class TestNotRegex:
 
 # --- json_valid ---
 
+
 class TestJsonValid:
     def test_passes_on_valid_json_object(self):
-        result = evaluate_assertion(Assertion(type="json_valid", value=None), response('{"key": "value"}'))
+        result = evaluate_assertion(
+            Assertion(type="json_valid", value=None), response('{"key": "value"}')
+        )
         assert result.passed
 
     def test_passes_on_valid_json_array(self):
-        result = evaluate_assertion(Assertion(type="json_valid", value=None), response('[1, 2, 3]'))
+        result = evaluate_assertion(Assertion(type="json_valid", value=None), response("[1, 2, 3]"))
         assert result.passed
 
     def test_fails_on_plain_text(self):
@@ -131,6 +154,7 @@ class TestJsonValid:
 
 
 # --- json_schema ---
+
 
 class TestJsonSchema:
     def test_passes_on_valid_schema(self):
@@ -150,7 +174,10 @@ class TestJsonSchema:
 
     def test_fails_on_wrong_type(self):
         result = evaluate_assertion(
-            Assertion(type="json_schema", schema={"type": "object", "properties": {"age": {"type": "number"}}}),
+            Assertion(
+                type="json_schema",
+                schema={"type": "object", "properties": {"age": {"type": "number"}}},
+            ),
             response('{"age": "not a number"}'),
         )
         # jsonschema with additionalProperties allows this by default — only fails if strict
@@ -175,6 +202,7 @@ class TestJsonSchema:
 
 # --- min_length / max_length ---
 
+
 class TestLength:
     def test_min_length_passes_when_met(self):
         result = evaluate_assertion(Assertion(type="min_length", value=5), response("hello world"))
@@ -185,7 +213,9 @@ class TestLength:
         assert not result.passed
 
     def test_max_length_passes_when_under(self):
-        result = evaluate_assertion(Assertion(type="max_length", value=100), response("hello world"))
+        result = evaluate_assertion(
+            Assertion(type="max_length", value=100), response("hello world")
+        )
         assert result.passed
 
     def test_max_length_fails_when_over(self):
@@ -207,25 +237,35 @@ class TestLength:
 
 # --- max_tokens ---
 
+
 class TestMaxTokens:
     def test_passes_under_limit(self):
-        result = evaluate_assertion(Assertion(type="max_tokens", value=10), response(output_tokens=5))
+        result = evaluate_assertion(
+            Assertion(type="max_tokens", value=10), response(output_tokens=5)
+        )
         assert result.passed
 
     def test_fails_over_limit(self):
-        result = evaluate_assertion(Assertion(type="max_tokens", value=1), response(output_tokens=5))
+        result = evaluate_assertion(
+            Assertion(type="max_tokens", value=1), response(output_tokens=5)
+        )
         assert not result.passed
 
     def test_exact_boundary(self):
-        result = evaluate_assertion(Assertion(type="max_tokens", value=5), response(output_tokens=5))
+        result = evaluate_assertion(
+            Assertion(type="max_tokens", value=5), response(output_tokens=5)
+        )
         assert result.passed
 
 
 # --- latency_ms ---
 
+
 class TestLatency:
     def test_passes_under_limit(self):
-        result = evaluate_assertion(Assertion(type="latency_ms", value=100), response(latency_ms=50))
+        result = evaluate_assertion(
+            Assertion(type="latency_ms", value=100), response(latency_ms=50)
+        )
         assert result.passed
 
     def test_fails_over_limit(self):
@@ -238,6 +278,7 @@ class TestLatency:
 
 
 # --- cost_usd ---
+
 
 class TestCost:
     def test_passes_under_limit(self):
@@ -253,12 +294,15 @@ class TestCost:
         assert result.passed
 
     def test_none_cost_treated_as_zero(self):
-        resp = ModelResponse(output="x", latency_ms=1, model="t", provider="mock", estimated_cost_usd=None)
+        resp = ModelResponse(
+            output="x", latency_ms=1, model="t", provider="mock", estimated_cost_usd=None
+        )
         result = evaluate_assertion(Assertion(type="cost_usd", value=0.01), resp)
         assert result.passed
 
 
 # --- unsupported ---
+
 
 class TestUnsupported:
     def test_unsupported_type_raises_error(self):
@@ -268,6 +312,7 @@ class TestUnsupported:
 
 
 # --- severity ---
+
 
 class TestSeverity:
     def test_default_severity_is_fail(self):

@@ -1,4 +1,5 @@
 """Tests for GitHub markdown report generation."""
+
 from promptdrift.models import RegressionReport, TestRun
 from promptdrift.models.result import EvaluationResult
 from promptdrift.reports.github import MARKER, github_markdown
@@ -15,30 +16,58 @@ class TestGithubMarkdown:
 
     def test_fail_verdict(self):
         report = RegressionReport(
-            provider="mock", model="m",
-            tests=[TestRun(
-                test_id="broken", provider="mock", model="m",
-                input="", output="", latency_ms=0, status="FAIL",
-                evaluations=[EvaluationResult(
-                    passed=False, assertion="contains", expected="x",
-                    actual="y", reason="Missing text", severity="fail",
-                )],
-            )],
+            provider="mock",
+            model="m",
+            tests=[
+                TestRun(
+                    test_id="broken",
+                    provider="mock",
+                    model="m",
+                    input="",
+                    output="",
+                    latency_ms=0,
+                    status="FAIL",
+                    evaluations=[
+                        EvaluationResult(
+                            passed=False,
+                            assertion="contains",
+                            expected="x",
+                            actual="y",
+                            reason="Missing text",
+                            severity="fail",
+                        )
+                    ],
+                )
+            ],
         )
         md = github_markdown(report)
         assert "❌ Regression detected" in md
 
     def test_warn_verdict(self):
         report = RegressionReport(
-            provider="mock", model="m",
-            tests=[TestRun(
-                test_id="soft", provider="mock", model="m",
-                input="", output="", latency_ms=0, status="WARN",
-                evaluations=[EvaluationResult(
-                    passed=False, assertion="contains", expected="x",
-                    actual="y", reason="Missing text", severity="warn",
-                )],
-            )],
+            provider="mock",
+            model="m",
+            tests=[
+                TestRun(
+                    test_id="soft",
+                    provider="mock",
+                    model="m",
+                    input="",
+                    output="",
+                    latency_ms=0,
+                    status="WARN",
+                    evaluations=[
+                        EvaluationResult(
+                            passed=False,
+                            assertion="contains",
+                            expected="x",
+                            actual="y",
+                            reason="Missing text",
+                            severity="warn",
+                        )
+                    ],
+                )
+            ],
         )
         md = github_markdown(report)
         assert "⚠️ Warnings detected" in md
@@ -57,15 +86,29 @@ class TestGithubMarkdown:
 
     def test_includes_failure_reason(self):
         report = RegressionReport(
-            provider="mock", model="m",
-            tests=[TestRun(
-                test_id="a", provider="mock", model="m",
-                input="", output="", latency_ms=0, status="FAIL",
-                evaluations=[EvaluationResult(
-                    passed=False, assertion="contains", expected="x",
-                    actual="y", reason="Required text missing", severity="fail",
-                )],
-            )],
+            provider="mock",
+            model="m",
+            tests=[
+                TestRun(
+                    test_id="a",
+                    provider="mock",
+                    model="m",
+                    input="",
+                    output="",
+                    latency_ms=0,
+                    status="FAIL",
+                    evaluations=[
+                        EvaluationResult(
+                            passed=False,
+                            assertion="contains",
+                            expected="x",
+                            actual="y",
+                            reason="Required text missing",
+                            severity="fail",
+                        )
+                    ],
+                )
+            ],
         )
         md = github_markdown(report)
         assert "Required text missing" in md

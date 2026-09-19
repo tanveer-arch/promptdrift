@@ -1,107 +1,60 @@
 # Architecture
 
-PromptDrift follows a layered architecture where each module has a single responsibility and communicates through Pydantic models.
+PromptDrift follows a layered, modular architecture designed for local-first execution, Git-native CI workflows, and zero-telemetry privacy.
 
 ## Data Flow
 
 ```
-promptdrift.yaml          Jinja2 Template         LLM Provider
-       │                       │                       │
-       ▼                       ▼                       ▼
-  ┌─────────┐           ┌───────────┐           ┌───────────┐
-  │ Config  │──────────▶│ Templates │──────────▶│ Providers │
-  │ Loader  │           │  Renderer │           │  Adapter  │
-  └─────────┘           └───────────┘           └─────┬─────┘
-       │                                              │
-       │  TestCase[]                    ModelResponse  │
-       ▼                                              ▼
-  ┌──────────────────────────────────────────────────────┐
-  │                    Engine (Runner)                    │
-  │                                                      │
-  │  For each test:                                      │
-  │    1. Render prompt template with variables           │
-  │    2. Send to provider                               │
-  │    3. Evaluate all assertions                        │
-  │    4. Check thresholds                               │
-  │    5. Determine PASS / WARN / FAIL                   │
-  └───────────────┬──────────────────────────────────────┘
-                  │
-                  │  RegressionReport
-                  ▼
-  ┌───────────────────────────────────┐
-  │        Baseline Comparison        │
-  │  (optional, if baseline exists)   │
-  │                                   │
-  │  - Hash comparison                │
-  │  - Diagnostic annotations         │
-  │  - New test detection              │
-  └───────────────┬───────────────────┘
-                  │
-                  │  RegressionReport (annotated)
-                  ▼
-  ┌──────────┬──────────┬──────────┬──────────┐
-  │ Terminal │   JSON   │   HTML   │  GitHub  │
-  │  Report  │  Output  │  Report  │ Summary  │
-  └──────────┴──────────┴──────────┴──────────┘
-                  │
-                  ▼
-  ┌───────────────────────────────────┐
-  │     SQLite Local History          │
-  │  (best-effort, non-critical)      │
-  └───────────────────────────────────┘
+Traffic / Interaction ───▶ Capture Ingestion ───▶ Discovery (`learn`) ───▶ Scenario Library (.promptdrift/scenarios.json)
+                                                                                   │
+                                                                                   ▼
+promptdrift.yaml ───────▶ Config Loader ──────────────────────────────────▶ Runner Engine
+                                                                                   │
+                                                                           Provider Adapter (OpenAI/Ollama/Mock)
+                                                                                   │
+                                                                             ModelResponse
+                                                                                   │
+                                                                           Evaluators (Assertions + Semantic)
+                                                                                   │
+                                                                                   ▼
+                                                                           RegressionReport
+                                                                                   │
+                                           Git Context (diff/base) ───────────────┼─────────────── Baseline Store (v1/v2)
+                                                                                   │
+                                                                                   ▼
+                                                                        Impact Radius Engine
+                                                                                   │
+                                                                    ┌──────────────┼──────────────┐
+                                                                    ▼              ▼              ▼
+                                                               Terminal CLI   JSON / HTML   GitHub Step Summary / PR Comment
 ```
 
 ## Module Responsibilities
 
-### `config.py` — Configuration Loader
-
-Reads `promptdrift.yaml`, validates it against strict Pydantic models, and returns a typed `Config` object. Rejects unknown fields immediately rather than ignoring them.
-
-### `templates.py` — Prompt Renderer
-
-Renders Jinja2 templates in a sandboxed environment. Detects missing variables before rendering and raises clear errors. No filesystem access or code execution from templates.
-
-### `providers/` — LLM Adapters
-
-Each provider (OpenAI, Ollama, Mock) implements a single `complete()` method that returns a normalized `ModelResponse`. Providers handle their own authentication, HTTP calls, and error wrapping.
-
-- **`openai.py`** — Uses `httpx` directly (no SDK dependency). Reads API key from env.
-- **`ollama.py`** — Calls the local Ollama API. No authentication needed.
-- **`mock.py`** — Echoes the prompt. Zero latency, zero cost, fully deterministic.
-
-### `evaluators/` — Assertion Engine
-
-Evaluates each assertion independently against the model response. Returns an `EvaluationResult` with pass/fail, expected/actual values, and a human-readable reason. Each assertion type is a pure function — no side effects.
-
-### `engine/` — Execution Core
-
-- **`runner.py`** — Orchestrates the test suite: render → call → evaluate → aggregate.
-- **`baseline.py`** — Reads and writes baseline files. Baselines store hashes (not raw output).
-- **`regression.py`** — Compares current results against a baseline. Annotates changes without causing spurious failures.
+### `git.py` — Git Context & Diffing
+Discovers git repository root, detects current branch and commit SHA, and identifies modified prompt templates relative to Git base refs (e.g. `origin/main` vs `HEAD`).
 
 ### `models/` — Data Contracts
+- **`config.py`** — Validates `promptdrift.yaml` supporting `version: 1` and `version: 2`.
+- **`capture.py`** — `Interaction`, `Scenario`, and `ScenarioLibrary`.
+- **`baseline.py`** — Strict `Baseline` schema v2 with backward-compatible v1 migration.
+- **`result.py`** — `ModelResponse`, `EvaluationResult`, `TestRun`, and `RegressionReport`.
 
-All data flows through Pydantic models with `extra="forbid"`:
+### `engine/` — Core Execution & Analysis
+- **`runner.py`** — Renders templates, calls providers, evaluates contracts, and aggregates runs.
+- **`capture.py`** — Sanitizes and records local interactions for future learning.
+- **`discovery.py`** — Deterministically clusters raw interactions into candidate scenarios (`promptdrift learn`).
+- **`suggest.py`** — Automatically derives contract suggestions (JSON validity, schema, length bounds, policy rules).
+- **`check.py`** — Orchestrates Git-aware selective test execution and computes impact radius.
 
-- **`config.py`** — `Config`, `ProviderConfig`, `Defaults`, `BaselineConfig`, `CIConfig`
-- **`test.py`** — `TestCase`, `Assertion`, `Evaluator`, `Threshold`
-- **`result.py`** — `ModelResponse`, `EvaluationResult`, `TestRun`, `RegressionReport`
-- **`baseline.py`** — `Baseline`, `BaselineTest`
+### `impact.py` — Impact Radius & Classification
+Categorizes before/after behavioral deltas into `REGRESSED`, `IMPROVED`, `UNCHANGED`, `CHANGED_BUT_VALID`, `NEW`, and `MISSING`. Computes aggregate latency and cost deltas.
+
+### `storage/` — Local State
+- **`sqlite.py`** — Local SQLite storage for interaction logs and run history (never committed to Git).
+- **`scenarios.py`** — Versioned JSON scenario store (`.promptdrift/scenarios.json`).
 
 ### `reports/` — Output Formatters
-
-- **`terminal.py`** — Rich tables for the CLI.
-- **`html.py`** — Self-contained HTML file with no external dependencies.
-- **`github.py`** — Markdown for GitHub Step Summaries and PR comments.
-
-### `storage/` — Local History
-
-SQLite-based local run history. Best-effort only — failures are silently caught. Raw prompts and outputs are suppressed by default for privacy.
-
-## Design Principles
-
-1. **Contracts, not cosmetic diffs.** A wording change is not a failure. Only violated behavioral assertions fail the build.
-2. **Privacy by default.** No telemetry, no hosted service, no raw output in baselines. API keys are env-only.
-3. **Strict validation.** Unknown config fields are errors, not warnings. Catch mistakes at load time.
-4. **Provider isolation.** Adding a new provider requires one file and no changes to the engine.
-5. **Deterministic evaluation.** All built-in assertions are deterministic — same input always produces the same pass/fail result.
+- **`terminal.py`** & **`impact_report.py`** — Rich CLI tables and impact summaries.
+- **`github.py`** — Markdown formatted for GitHub Action Step Summaries and deduplicating PR comments.
+- **`html.py`** — Standalone, offline HTML report.

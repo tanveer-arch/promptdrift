@@ -1,10 +1,12 @@
-"""Read/write deterministic, Git-friendly baselines."""
+"""Read/write deterministic, Git-friendly baselines with v1/v2 schema compatibility."""
+
 from __future__ import annotations
 
 import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -13,21 +15,44 @@ from promptdrift.errors import BaselineError
 from promptdrift.models import Baseline, BaselineTest, RegressionReport
 
 
-def baseline_from_report(report: RegressionReport) -> Baseline:
-    return Baseline(schema_version=1, promptdrift_version=__version__, generated_at=datetime.now(UTC),
-        provider={"type": report.provider, "model": report.model}, tests={
-            run.test_id: BaselineTest(output_hash=hashlib.sha256(run.output.encode()).hexdigest(), status=run.status,
-                assertions={evaluation.assertion: evaluation.passed for evaluation in run.evaluations},
-                metrics={"latency_ms": run.latency_ms, "input_tokens": run.input_tokens,
-                         "output_tokens": run.output_tokens, "estimated_cost_usd": run.estimated_cost_usd})
-            for run in report.tests})
+def baseline_from_report(report: RegressionReport, prompt_revision: str | None = None) -> Baseline:
+    return Baseline(
+        schema_version=2,
+        promptdrift_version=__version__,
+        generated_at=datetime.now(UTC),
+        provider={"type": report.provider, "model": report.model},
+        prompt_revision=prompt_revision,
+        tests={
+            run.test_id: BaselineTest(
+                output_hash=hashlib.sha256(run.output.encode()).hexdigest(),
+                status=run.status,
+                assertions={
+                    evaluation.assertion: evaluation.passed for evaluation in run.evaluations
+                },
+                metrics={
+                    "latency_ms": run.latency_ms,
+                    "input_tokens": run.input_tokens,
+                    "output_tokens": run.output_tokens,
+                    "estimated_cost_usd": run.estimated_cost_usd,
+                },
+                evaluator_scores={},
+                metadata={},
+            )
+            for run in report.tests
+        },
+    )
 
 
-def write_baseline(path: Path, report: RegressionReport, *, force: bool = False) -> None:
+def write_baseline(
+    path: Path, report: RegressionReport, *, force: bool = False, prompt_revision: str | None = None
+) -> None:
     if path.exists() and not force:
         raise BaselineError(f"Baseline already exists: {path}. Use --force to replace it.")
     path.parent.mkdir(parents=True, exist_ok=True)
-    content = baseline_from_report(report).model_dump_json(indent=2) + "\n"
+    content = (
+        baseline_from_report(report, prompt_revision=prompt_revision).model_dump_json(indent=2)
+        + "\n"
+    )
     path.write_text(content, encoding="utf-8")
 
 
@@ -35,6 +60,16 @@ def load_baseline(path: Path) -> Baseline:
     if not path.is_file():
         raise BaselineError(f"Baseline file not found: {path}. Run 'promptdrift baseline' first.")
     try:
-        return Baseline.model_validate_json(path.read_text(encoding="utf-8"))
+        raw_text = path.read_text(encoding="utf-8")
+        data: dict[str, Any] = json.loads(raw_text)
+        # Migrate schema_version 1 to schema_version 2 dynamically
+        if data.get("schema_version") == 1:
+            data["schema_version"] = 2
+            for test_data in data.get("tests", {}).values():
+                if "evaluator_scores" not in test_data:
+                    test_data["evaluator_scores"] = {}
+                if "metadata" not in test_data:
+                    test_data["metadata"] = {}
+        return Baseline.model_validate(data)
     except (ValidationError, json.JSONDecodeError) as exc:
         raise BaselineError(f"Invalid baseline {path.name}: {exc}") from exc

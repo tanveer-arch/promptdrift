@@ -1,9 +1,11 @@
 """Git-friendly canonical baseline models."""
+
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class BaselineTest(BaseModel):
@@ -12,12 +14,15 @@ class BaselineTest(BaseModel):
     status: str
     assertions: dict[str, bool]
     metrics: dict[str, float | int | None]
+    evaluator_scores: dict[str, float | None] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class Baseline(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    schema_version: int = 1
+    schema_version: int = 2
     promptdrift_version: str
     generated_at: datetime
     provider: dict[str, str]
+    prompt_revision: str | None = None
     tests: dict[str, BaselineTest]

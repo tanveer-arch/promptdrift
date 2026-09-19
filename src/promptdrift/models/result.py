@@ -1,4 +1,5 @@
 """Normalized run and report results, independent of presentation."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -55,4 +56,7 @@ class RegressionReport(BaseModel):
 
     @property
     def counts(self) -> dict[str, int]:
-        return {status: sum(test.status == status for test in self.tests) for status in ("PASS", "WARN", "FAIL")}
+        return {
+            status: sum(test.status == status for test in self.tests)
+            for status in ("PASS", "WARN", "FAIL")
+        }

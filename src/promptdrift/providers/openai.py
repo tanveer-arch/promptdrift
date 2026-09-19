@@ -1,4 +1,5 @@
 """Small OpenAI Chat Completions adapter without SDK coupling."""
+
 from __future__ import annotations
 
 import os
@@ -24,10 +25,15 @@ class OpenAIProvider(Provider):
         start = time.perf_counter()
         try:
             response = httpx.post(
-                (self.config.base_url or "https://api.openai.com/v1").rstrip("/") + "/chat/completions",
+                (self.config.base_url or "https://api.openai.com/v1").rstrip("/")
+                + "/chat/completions",
                 headers={"Authorization": f"Bearer {api_key}"},
-                json={"model": self.config.model, "messages": [{"role": "user", "content": prompt}],
-                      "temperature": temperature, "max_tokens": max_output_tokens},
+                json={
+                    "model": self.config.model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": temperature,
+                    "max_tokens": max_output_tokens,
+                },
                 timeout=60,
             )
             response.raise_for_status()
@@ -37,6 +43,12 @@ class OpenAIProvider(Provider):
         except (httpx.HTTPError, KeyError, ValueError) as exc:
             # Do not include response bodies: they can contain sensitive prompt data.
             raise ProviderError(f"OpenAI request failed: {type(exc).__name__}") from exc
-        return ModelResponse(output=output, input_tokens=usage.get("prompt_tokens"),
-            output_tokens=usage.get("completion_tokens"), latency_ms=round((time.perf_counter()-start)*1000, 2),
-            model=self.config.model, provider="openai", estimated_cost_usd=None)
+        return ModelResponse(
+            output=output,
+            input_tokens=usage.get("prompt_tokens"),
+            output_tokens=usage.get("completion_tokens"),
+            latency_ms=round((time.perf_counter() - start) * 1000, 2),
+            model=self.config.model,
+            provider="openai",
+            estimated_cost_usd=None,
+        )
