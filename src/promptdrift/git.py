@@ -117,3 +117,55 @@ class GitContext:
             pass
 
         return sorted(list(changed))
+
+    def compute_prompt_hash(self, prompt_paths: list[Path]) -> str | None:
+        """Compute deterministic SHA-256 hash of referenced prompt file contents.
+
+        Only reads files that exist. Sorts by relative path for stability.
+        """
+        import hashlib
+
+        contents = []
+        for p in prompt_paths:
+            # Resolve to absolute path, then try to make relative to root
+            try:
+                abs_p = p.resolve()
+                rel_p = abs_p.relative_to(self.root)
+            except ValueError:
+                # Outside root or error, use name
+                rel_p = Path(p.name)
+
+            if p.is_file():
+                try:
+                    text = p.read_text(encoding="utf-8")
+                    contents.append((str(rel_p.as_posix()), text))
+                except OSError:
+                    pass
+
+        if not contents:
+            return None
+
+        contents.sort(key=lambda x: x[0])
+
+        hasher = hashlib.sha256()
+        for rel_path, text in contents:
+            hasher.update(f"{rel_path}\x00{text}\x00".encode())
+
+        return hasher.hexdigest()
+
+    def has_uncommitted_prompt_changes(self, prompt_paths: list[Path]) -> bool:
+        """Check if any of the referenced prompt files have uncommitted changes."""
+        changed = set(self.get_changed_files())
+        if not changed:
+            return False
+
+        for p in prompt_paths:
+            try:
+                abs_p = p.resolve()
+                rel_p = abs_p.relative_to(self.root)
+                if rel_p.as_posix() in changed:
+                    return True
+            except ValueError:
+                pass
+
+        return False

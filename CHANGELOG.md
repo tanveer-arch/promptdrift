@@ -4,6 +4,16 @@ All notable changes to PromptDrift are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-09-23
+
+### Added
+- **Production AI Interactions Capture:** `CaptureRecorder` API to capture production traffic with deduplication, redact rules, and sampling strategies.
+- **OpenAI Integration Wrapper:** Optional, dependency-free wrapper for `openai` sync/async clients that seamlessly logs interactions to the capture store without crashing the host app.
+- **Selective Acceptance Engine:** Human approval workflow allowing granular updates (`--changed`, `--scenario`, `--accept-regressions`) while enforcing strict promotion rules.
+- **Git Revision Hashing for Baselines:** Baseline schemas (v2) now include git SHA and prompt hash to link traffic definitively to a code state.
+- **Baseline History:** Archiving previous baselines automatically before updates.
+- **Enhanced Impact Reporting:** Added Git revision references in `ImpactRadiusReport` and `RegressionReport` HTML output.
+
 ## [0.2.0] - 2026-09-19
 
 ### Added

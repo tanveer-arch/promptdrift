@@ -1,4 +1,5 @@
 """Tests for configuration loading and validation."""
+
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,9 @@ from promptdrift.errors import ConfigError
 class TestConfigLoading:
     def test_loads_valid_minimal_config(self, tmp_path):
         path = tmp_path / "promptdrift.yaml"
-        path.write_text("version: 1\nprovider: {type: mock}\ntests:\n  - id: hello\n    prompt: hello.txt\n")
+        path.write_text(
+            "version: 1\nprovider: {type: mock}\ntests:\n  - id: hello\n    prompt: hello.txt\n"
+        )
         config, config_path = load_config(path)
         assert config.provider.type == "mock"
         assert config.version == 1
@@ -33,7 +36,9 @@ class TestConfigLoading:
 
     def test_applies_defaults(self, tmp_path):
         path = tmp_path / "promptdrift.yaml"
-        path.write_text("version: 1\nprovider: {type: mock}\ntests:\n  - id: hello\n    prompt: p.txt\n")
+        path.write_text(
+            "version: 1\nprovider: {type: mock}\ntests:\n  - id: hello\n    prompt: p.txt\n"
+        )
         config, _ = load_config(path)
         assert config.defaults.temperature == 0
         assert config.defaults.max_output_tokens == 500
@@ -64,7 +69,9 @@ class TestConfigValidation:
 
     def test_rejects_invalid_provider_type(self, tmp_path):
         path = tmp_path / "promptdrift.yaml"
-        path.write_text("version: 1\nprovider: {type: anthropic}\ntests:\n  - id: a\n    prompt: a.txt\n")
+        path.write_text(
+            "version: 1\nprovider: {type: anthropic}\ntests:\n  - id: a\n    prompt: a.txt\n"
+        )
         with pytest.raises(ConfigError):
             load_config(path)
 
@@ -89,7 +96,9 @@ class TestConfigValidation:
 
     def test_rejects_invalid_test_id_format(self, tmp_path):
         path = tmp_path / "promptdrift.yaml"
-        path.write_text("version: 1\nprovider: {type: mock}\ntests:\n  - id: 'has spaces'\n    prompt: a.txt\n")
+        path.write_text(
+            "version: 1\nprovider: {type: mock}\ntests:\n  - id: 'has spaces'\n    prompt: a.txt\n"
+        )
         with pytest.raises(ConfigError):
             load_config(path)
 
@@ -115,7 +124,9 @@ class TestConfigErrors:
 class TestPathResolution:
     def test_resolves_relative_paths(self, tmp_path):
         path = tmp_path / "promptdrift.yaml"
-        path.write_text("version: 1\nprovider: {type: mock}\ntests:\n  - id: a\n    prompt: prompts/test.txt\n")
+        path.write_text(
+            "version: 1\nprovider: {type: mock}\ntests:\n  - id: a\n    prompt: prompts/test.txt\n"
+        )
         config, config_path = load_config(path)
         resolved = config.resolve_path(config_path, "prompts/test.txt")
         assert resolved == tmp_path / "prompts" / "test.txt"
@@ -123,7 +134,9 @@ class TestPathResolution:
     def test_absolute_paths_unchanged(self, tmp_path):
         abs_path_str = Path(tmp_path.anchor, "abs", "path.txt").as_posix()
         path = tmp_path / "promptdrift.yaml"
-        path.write_text(f"version: 1\nprovider: {{type: mock}}\ntests:\n  - id: a\n    prompt: {abs_path_str}\n")
+        path.write_text(
+            f"version: 1\nprovider: {{type: mock}}\ntests:\n  - id: a\n    prompt: {abs_path_str}\n"
+        )
         config, config_path = load_config(path)
         resolved = config.resolve_path(config_path, abs_path_str)
         assert resolved == Path(abs_path_str)

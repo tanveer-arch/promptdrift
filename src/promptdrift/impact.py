@@ -52,6 +52,10 @@ class ImpactRadiusReport(BaseModel):
     output_tokens_pct_change: float = 0.0
     category_breakdown: dict[str, int] = Field(default_factory=dict)
     scenarios: list[ScenarioImpact] = Field(default_factory=list)
+    current_git_sha: str | None = None
+    current_prompt_hash: str | None = None
+    base_git_sha: str | None = None
+    base_prompt_hash: str | None = None
 
 
 def classify_scenario_change(
@@ -140,6 +144,8 @@ def calculate_impact_radius(
     baseline: Baseline | None,
     scenario_metadata: dict[str, dict[str, Any]] | None = None,
     skipped_ids: set[str] | None = None,
+    current_git_sha: str | None = None,
+    current_prompt_hash: str | None = None,
 ) -> ImpactRadiusReport:
     scenario_metadata = scenario_metadata or {}
     skipped_ids = skipped_ids or set()
@@ -239,4 +245,8 @@ def calculate_impact_radius(
         cost_pct_change=cost_pct,
         category_breakdown=category_breakdown,
         scenarios=scenarios,
+        current_git_sha=current_git_sha,
+        current_prompt_hash=current_prompt_hash,
+        base_git_sha=baseline.git_sha if baseline else None,
+        base_prompt_hash=baseline.prompt_hash if baseline else None,
     )

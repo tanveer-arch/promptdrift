@@ -1,12 +1,30 @@
-"""Deterministic scenario discovery and grouping from captured interactions."""
+"""Deterministic scenario discovery with stable fingerprinting.
+
+Scenarios are identified by a deterministic hash of (prompt, full_input, variables).
+Different edge cases with different input text produce separate scenarios.
+Repeated identical interactions increment sample_count / update last_seen.
+"""
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
-from collections import defaultdict
 from collections.abc import Sequence
 
 from promptdrift.models.capture import Interaction, Scenario
+
+
+def _normalize(text: str) -> str:
+    """Normalize text for fingerprinting: strip, lowercase, collapse whitespace."""
+    return re.sub(r"\s+", " ", text.strip().lower())
+
+
+def _compute_fingerprint(prompt: str, input_text: str, variables: dict) -> str:
+    """Deterministic fingerprint from prompt identity + full input + variables."""
+    canonical_vars = json.dumps(variables, sort_keys=True, default=str)
+    raw = f"{_normalize(prompt)}\x00{_normalize(input_text)}\x00{canonical_vars}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
 def _slugify(text: str) -> str:
@@ -34,35 +52,40 @@ def _infer_category(input_text: str, tags: list[str]) -> str:
     return "general"
 
 
-def discover_scenarios(interactions: Sequence[Interaction]) -> list[Scenario]:
-    """Group interactions deterministically into candidate scenarios by prompt and category."""
-    grouped: dict[str, list[Interaction]] = defaultdict(list)
+def _make_scenario_id(fingerprint: str, category: str, input_text: str) -> str:
+    """Generate a stable, readable scenario ID from fingerprint."""
+    prefix = _slugify(category)
+    suffix = _slugify(input_text[:20])
+    # Use first 8 chars of fingerprint for uniqueness
+    return f"{prefix}_{suffix}_{fingerprint[:8]}"
 
+
+def discover_scenarios(interactions: Sequence[Interaction]) -> list[Scenario]:
+    """Group interactions by deterministic fingerprint into candidate scenarios.
+
+    Each unique (prompt, full_input, variables) combination produces one scenario.
+    Repeated interactions increment sample_count and update timestamps.
+    """
+    # Group by fingerprint
+    fingerprint_map: dict[str, list[Interaction]] = {}
     for interaction in interactions:
-        cat = _infer_category(interaction.input, interaction.tags)
-        group_key = f"{interaction.prompt}::{cat}"
-        grouped[group_key].append(interaction)
+        fp = _compute_fingerprint(interaction.prompt, interaction.input, interaction.variables)
+        fingerprint_map.setdefault(fp, []).append(interaction)
 
     candidates: list[Scenario] = []
-    seen_ids: set[str] = set()
 
-    for group_key, items in grouped.items():
-        # Pick the most representative item (longest/most descriptive)
-        items_sorted = sorted(items, key=lambda x: (len(x.input), x.timestamp), reverse=True)
+    for fp, items in fingerprint_map.items():
+        # Use most recent as representative
+        items_sorted = sorted(items, key=lambda x: x.timestamp, reverse=True)
         representative = items_sorted[0]
-        cat = _infer_category(representative.input, representative.tags)
+        oldest = items_sorted[-1]
 
-        base_id = f"{_slugify(cat)}_{_slugify(representative.input[:20])}"
-        candidate_id = base_id
-        counter = 1
-        while candidate_id in seen_ids:
-            candidate_id = f"{base_id}_{counter:03d}"
-            counter += 1
-        seen_ids.add(candidate_id)
+        cat = _infer_category(representative.input, representative.tags)
+        scenario_id = _make_scenario_id(fp, cat, representative.input)
 
         candidates.append(
             Scenario(
-                id=candidate_id,
+                id=scenario_id,
                 prompt=representative.prompt,
                 input=representative.input,
                 variables=representative.variables,
@@ -72,7 +95,11 @@ def discover_scenarios(interactions: Sequence[Interaction]) -> list[Scenario]:
                 status="candidate",
                 assertions=[],
                 thresholds={},
-                created_at=representative.timestamp,
+                created_at=oldest.timestamp,
+                sample_count=len(items),
+                first_seen=oldest.timestamp,
+                last_seen=representative.timestamp,
+                fingerprint=fp,
             )
         )
 

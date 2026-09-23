@@ -1,4 +1,5 @@
 """Tests for baseline regression comparison logic."""
+
 import hashlib
 
 from promptdrift.engine.regression import compare_to_baseline
@@ -21,8 +22,13 @@ def make_report(*runs):
 
 def make_run(test_id="x", output="test output", status="PASS"):
     return TestRun(
-        test_id=test_id, provider="mock", model="m",
-        input="prompt", output=output, latency_ms=1.0, status=status,
+        test_id=test_id,
+        provider="mock",
+        model="m",
+        input="prompt",
+        output=output,
+        latency_ms=1.0,
+        status=status,
     )
 
 
@@ -31,7 +37,12 @@ def baseline_test(output="test output", status="PASS"):
         output_hash=hashlib.sha256(output.encode()).hexdigest(),
         status=status,
         assertions={},
-        metrics={"latency_ms": 1.0, "input_tokens": None, "output_tokens": None, "estimated_cost_usd": None},
+        metrics={
+            "latency_ms": 1.0,
+            "input_tokens": None,
+            "output_tokens": None,
+            "estimated_cost_usd": None,
+        },
     )
 
 
@@ -70,10 +81,12 @@ class TestRegressionComparison:
             make_run(test_id="a", output="same"),
             make_run(test_id="b", output="different"),
         )
-        baseline = make_baseline({
-            "a": baseline_test(output="same"),
-            "b": baseline_test(output="original"),
-        })
+        baseline = make_baseline(
+            {
+                "a": baseline_test(output="same"),
+                "b": baseline_test(output="original"),
+            }
+        )
         result = compare_to_baseline(report, baseline)
         assert result.tests[0].status == "PASS"
         assert result.tests[1].status == "PASS"
@@ -86,10 +99,12 @@ class TestRegressionComparison:
     def test_test_removed_from_config_is_ignored(self):
         """Baseline has tests that are no longer in the config — no error."""
         report = make_report(make_run(test_id="kept"))
-        baseline = make_baseline({
-            "kept": baseline_test(),
-            "removed": baseline_test(),
-        })
+        baseline = make_baseline(
+            {
+                "kept": baseline_test(),
+                "removed": baseline_test(),
+            }
+        )
         result = compare_to_baseline(report, baseline)
         assert len(result.tests) == 1
         assert result.tests[0].test_id == "kept"

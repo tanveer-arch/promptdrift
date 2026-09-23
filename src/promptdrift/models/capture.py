@@ -48,6 +48,10 @@ class Scenario(BaseModel):
         default_factory=dict
     )
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    sample_count: int = 1
+    first_seen: datetime | None = None
+    last_seen: datetime | None = None
+    fingerprint: str | None = None
 
 
 class ScenarioLibrary(BaseModel):

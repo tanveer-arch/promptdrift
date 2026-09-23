@@ -1,4 +1,5 @@
 """Shared fixtures for PromptDrift tests."""
+
 from __future__ import annotations
 
 import pytest
@@ -9,6 +10,7 @@ from promptdrift.models.result import EvaluationResult, ModelResponse, Regressio
 @pytest.fixture
 def mock_response():
     """Create a ModelResponse with default values."""
+
     def _make(output="hello world", latency_ms=12.0, input_tokens=5, output_tokens=2, cost=0.001):
         return ModelResponse(
             output=output,
@@ -19,12 +21,14 @@ def mock_response():
             output_tokens=output_tokens,
             estimated_cost_usd=cost,
         )
+
     return _make
 
 
 @pytest.fixture
 def sample_report():
     """Create a RegressionReport with one passing test."""
+
     def _make(test_id="hello", status="PASS", output="hello world", evaluations=None):
         return RegressionReport(
             provider="mock",
@@ -45,6 +49,7 @@ def sample_report():
                 )
             ],
         )
+
     return _make
 
 

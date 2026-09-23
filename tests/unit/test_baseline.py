@@ -41,6 +41,7 @@ class TestBaselineRoundtrip:
 
     def test_preserves_output_hash(self, tmp_path):
         import hashlib
+
         path = tmp_path / "baseline.json"
         report = make_report(output="deterministic")
         write_baseline(path, report)
@@ -50,10 +51,25 @@ class TestBaselineRoundtrip:
 
     def test_preserves_assertion_results(self, tmp_path):
         path = tmp_path / "baseline.json"
-        report = make_report(evaluations=[
-            EvaluationResult(passed=True, assertion="contains", expected="test", actual="test output", reason="ok"),
-            EvaluationResult(passed=False, assertion="max_length", expected=5, actual=11, reason="too long", severity="warn"),
-        ])
+        report = make_report(
+            evaluations=[
+                EvaluationResult(
+                    passed=True,
+                    assertion="contains",
+                    expected="test",
+                    actual="test output",
+                    reason="ok",
+                ),
+                EvaluationResult(
+                    passed=False,
+                    assertion="max_length",
+                    expected=5,
+                    actual=11,
+                    reason="too long",
+                    severity="warn",
+                ),
+            ]
+        )
         write_baseline(path, report)
         baseline = load_baseline(path)
         assert baseline.tests["x"].assertions["contains"] is True
@@ -71,10 +87,15 @@ class TestBaselineRoundtrip:
     def test_multiple_tests(self, tmp_path):
         path = tmp_path / "baseline.json"
         report = RegressionReport(
-            provider="mock", model="m",
+            provider="mock",
+            model="m",
             tests=[
-                TestRun(test_id="a", provider="mock", model="m", input="p1", output="o1", latency_ms=1),
-                TestRun(test_id="b", provider="mock", model="m", input="p2", output="o2", latency_ms=2),
+                TestRun(
+                    test_id="a", provider="mock", model="m", input="p1", output="o1", latency_ms=1
+                ),
+                TestRun(
+                    test_id="b", provider="mock", model="m", input="p2", output="o2", latency_ms=2
+                ),
             ],
         )
         write_baseline(path, report)
@@ -97,6 +118,7 @@ class TestBaselineSafety:
         write_baseline(path, make_report(output="second"), force=True)
         baseline = load_baseline(path)
         import hashlib
+
         assert baseline.tests["x"].output_hash == hashlib.sha256(b"second").hexdigest()
 
     def test_creates_parent_directories(self, tmp_path):

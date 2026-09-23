@@ -1,4 +1,5 @@
 """Loading and validating promptdrift.yaml."""
+
 from __future__ import annotations
 
 from pathlib import Path

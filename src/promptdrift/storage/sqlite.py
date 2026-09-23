@@ -176,3 +176,61 @@ def purge_storage(path: Path | None = None) -> bool:
         return True
     except (sqlite3.Error, OSError):
         return False
+
+
+def count_interactions(path: Path | None = None) -> int:
+    """Return the number of captured interactions."""
+    try:
+        with _get_db(path) as db:
+            row = db.execute("SELECT COUNT(*) FROM interactions").fetchone()
+            return row[0] if row else 0
+    except (sqlite3.Error, OSError):
+        return 0
+
+
+def purge_oldest_interactions(count: int, path: Path | None = None) -> int:
+    """Delete the *count* oldest interactions (rolling retention).
+
+    Returns the number of rows actually deleted.
+    """
+    if count <= 0:
+        return 0
+    try:
+        with _get_db(path) as db:
+            db.execute(
+                """
+                DELETE FROM interactions WHERE id IN (
+                    SELECT id FROM interactions ORDER BY timestamp ASC LIMIT ?
+                )
+                """,
+                (count,),
+            )
+            db.commit()
+            return count
+    except (sqlite3.Error, OSError):
+        return 0
+
+
+def purge_old_interactions(days: int, path: Path | None = None) -> int:
+    """Delete interactions older than *days* days.
+
+    Returns the number of rows deleted.
+    """
+    if days <= 0:
+        return 0
+    try:
+        cutoff = datetime.now(UTC).isoformat()
+        # Compute cutoff by subtracting days
+        from datetime import timedelta
+
+        cutoff_dt = datetime.now(UTC) - timedelta(days=days)
+        cutoff = cutoff_dt.isoformat()
+        with _get_db(path) as db:
+            cursor = db.execute(
+                "DELETE FROM interactions WHERE timestamp < ?",
+                (cutoff,),
+            )
+            db.commit()
+            return cursor.rowcount
+    except (sqlite3.Error, OSError):
+        return 0

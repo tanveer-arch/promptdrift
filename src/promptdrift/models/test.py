@@ -23,7 +23,7 @@ ASSERTION_TYPES = {
 
 
 class Assertion(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
     type: Literal[
         "exact_match",
         "contains",

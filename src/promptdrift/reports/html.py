@@ -29,6 +29,18 @@ def write_html_report(
     counts = report.counts
 
     if impact:
+        git_info = (
+            f"Git SHA: <strong>{impact.current_git_sha[:8]}</strong>"
+            if impact.current_git_sha
+            else ""
+        )
+        prompt_info = (
+            f"Prompt Hash: <strong>{impact.current_prompt_hash[:8]}</strong>"
+            if impact.current_prompt_hash
+            else ""
+        )
+        revision_html = f"{git_info} &middot; {prompt_info}" if (git_info or prompt_info) else ""
+
         summary_html = f"""
         <div class="summary">
           <div class="stat pass"><strong>{impact.improved}</strong> improved</div>
@@ -37,7 +49,8 @@ def write_html_report(
           <div class="stat fail"><strong>{impact.regressed}</strong> regressed</div>
         </div>
         <div class="meta" style="margin-bottom: 1rem;">
-          Impact Radius: <strong>{impact.impact_radius_percentage}%</strong> &middot; Latency Change: <strong>{impact.latency_pct_change:+.1f}%</strong> &middot; Cost Change: <strong>{impact.cost_pct_change:+.1f}%</strong>
+          Impact Radius: <strong>{impact.impact_radius_percentage}%</strong> &middot; Latency Change: <strong>{impact.latency_pct_change:+.1f}%</strong> &middot; Cost Change: <strong>{impact.cost_pct_change:+.1f}%</strong><br>
+          {revision_html}
         </div>
         """
         rows = ""

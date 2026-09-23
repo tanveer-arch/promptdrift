@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "promptdrift_version": "0.3.0",
+  "generated_at": "2026-09-23T17:44:31.170031Z",
+  "provider": {
+    "type": "mock",
+    "model": "m"
+  },
+  "prompt_revision": null,
+  "git_sha": null,
+  "prompt_hash": null,
+  "tests": {
+    "x": {
+      "output_hash": "a7937b64b8caa58f03721bb6bacf5c78cb235febe0e70b1b84cd99541461a08e",
+      "status": "PASS",
+      "assertions": {},
+      "metrics": {
+        "latency_ms": 1.0,
+        "input_tokens": 3,
+        "output_tokens": 2,
+        "estimated_cost_usd": 0.001
+      },
+      "evaluator_scores": {},
+      "metadata": {}
+    }
+  }
+}

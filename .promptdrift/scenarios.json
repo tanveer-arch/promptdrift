@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "scenarios": [
+    {
+      "id": "support_how_do_i_cancel_my_o_d79b772c",
+      "prompt": "prompts/example.txt",
+      "input": "How do I cancel my order?",
+      "variables": {},
+      "category": "support",
+      "tags": [
+        "support"
+      ],
+      "source": "capture",
+      "status": "promoted",
+      "assertions": [
+        {
+          "type": "min_length",
+          "value": 29,
+          "schema_": null,
+          "name": null,
+          "severity": "fail"
+        },
+        {
+          "type": "max_length",
+          "value": 79,
+          "schema_": null,
+          "name": null,
+          "severity": "warn"
+        }
+      ],
+      "thresholds": {},
+      "created_at": "2026-09-23T17:44:30.742733Z",
+      "sample_count": 1,
+      "first_seen": "2026-09-23T17:44:30.742733Z",
+      "last_seen": "2026-09-23T17:44:30.742733Z",
+      "fingerprint": "d79b772c2d4f3ced"
+    },
+    {
+      "id": "general_test_8df48d75",
+      "prompt": "p.txt",
+      "input": "test",
+      "variables": {},
+      "category": "general",
+      "tags": [],
+      "source": "capture",
+      "status": "candidate",
+      "assertions": [],
+      "thresholds": {},
+      "created_at": "2026-09-23T17:44:06.585296Z",
+      "sample_count": 1,
+      "first_seen": "2026-09-23T17:44:06.585296Z",
+      "last_seen": "2026-09-23T17:44:31.286057Z",
+      "fingerprint": "8df48d75c39de4e4"
+    }
+  ]
+}

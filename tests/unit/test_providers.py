@@ -1,4 +1,5 @@
 """Tests for provider adapters."""
+
 import httpx
 import pytest
 
@@ -16,13 +17,18 @@ class TestOpenAIProvider:
             assert kwargs["headers"]["Authorization"] == "Bearer test-key"
             return httpx.Response(
                 200,
-                json={"choices": [{"message": {"content": "hello"}}],
-                      "usage": {"prompt_tokens": 2, "completion_tokens": 1}},
+                json={
+                    "choices": [{"message": {"content": "hello"}}],
+                    "usage": {"prompt_tokens": 2, "completion_tokens": 1},
+                },
                 request=httpx.Request("POST", "https://example.test"),
             )
+
         monkeypatch.setenv("TEST_OPENAI_KEY", "test-key")
         monkeypatch.setattr("promptdrift.providers.openai.httpx.post", fake_post)
-        provider = OpenAIProvider(ProviderConfig(type="openai", model="test-model", api_key_env="TEST_OPENAI_KEY"))
+        provider = OpenAIProvider(
+            ProviderConfig(type="openai", model="test-model", api_key_env="TEST_OPENAI_KEY")
+        )
         response = provider.complete("test", temperature=0, max_output_tokens=10)
         assert response.output == "hello"
         assert response.input_tokens == 2
@@ -32,7 +38,9 @@ class TestOpenAIProvider:
 
     def test_missing_key_raises_safe_error(self, monkeypatch):
         monkeypatch.delenv("MISSING_KEY", raising=False)
-        provider = OpenAIProvider(ProviderConfig(type="openai", model="x", api_key_env="MISSING_KEY"))
+        provider = OpenAIProvider(
+            ProviderConfig(type="openai", model="x", api_key_env="MISSING_KEY")
+        )
         with pytest.raises(ProviderError, match="MISSING_KEY is not set"):
             provider.complete("test", temperature=0, max_output_tokens=10)
 
@@ -45,9 +53,11 @@ class TestOpenAIProvider:
     def test_http_error_raises_provider_error(self, monkeypatch):
         def fake_post(*args, **kwargs):
             return httpx.Response(
-                401, json={"error": "unauthorized"},
+                401,
+                json={"error": "unauthorized"},
                 request=httpx.Request("POST", "https://example.test"),
             )
+
         monkeypatch.setenv("TEST_KEY", "k")
         monkeypatch.setattr("promptdrift.providers.openai.httpx.post", fake_post)
         provider = OpenAIProvider(ProviderConfig(type="openai", model="x", api_key_env="TEST_KEY"))
@@ -65,21 +75,29 @@ class TestOpenAIProvider:
                 json={"choices": [{"message": {"content": "ok"}}], "usage": {}},
                 request=httpx.Request("POST", url),
             )
+
         monkeypatch.setenv("KEY", "k")
         monkeypatch.setattr("promptdrift.providers.openai.httpx.post", fake_post)
-        provider = OpenAIProvider(ProviderConfig(
-            type="openai", model="x", api_key_env="KEY",
-            base_url="https://custom.api.test/v1/",
-        ))
+        provider = OpenAIProvider(
+            ProviderConfig(
+                type="openai",
+                model="x",
+                api_key_env="KEY",
+                base_url="https://custom.api.test/v1/",
+            )
+        )
         provider.complete("test", temperature=0, max_output_tokens=10)
         assert called_url == "https://custom.api.test/v1/chat/completions"
 
     def test_error_does_not_leak_credentials(self, monkeypatch):
         def fake_post(*args, **kwargs):
             raise httpx.ConnectError("Connection refused")
+
         monkeypatch.setenv("SECRET_KEY", "sk-super-secret-12345")
         monkeypatch.setattr("promptdrift.providers.openai.httpx.post", fake_post)
-        provider = OpenAIProvider(ProviderConfig(type="openai", model="x", api_key_env="SECRET_KEY"))
+        provider = OpenAIProvider(
+            ProviderConfig(type="openai", model="x", api_key_env="SECRET_KEY")
+        )
         with pytest.raises(ProviderError) as exc_info:
             provider.complete("test", temperature=0, max_output_tokens=10)
         assert "sk-super-secret" not in str(exc_info.value)
@@ -93,6 +111,7 @@ class TestOllamaProvider:
                 json={"response": "local", "prompt_eval_count": 3, "eval_count": 1},
                 request=httpx.Request("POST", "http://localhost:11434/api/generate"),
             )
+
         monkeypatch.setattr("promptdrift.providers.ollama.httpx.post", fake_post)
         provider = OllamaProvider(ProviderConfig(type="ollama", model="llama3.2"))
         response = provider.complete("test", temperature=0, max_output_tokens=10)
@@ -104,6 +123,7 @@ class TestOllamaProvider:
     def test_connection_error(self, monkeypatch):
         def fake_post(*args, **kwargs):
             raise httpx.ConnectError("Connection refused")
+
         monkeypatch.setattr("promptdrift.providers.ollama.httpx.post", fake_post)
         provider = OllamaProvider(ProviderConfig(type="ollama", model="x"))
         with pytest.raises(ProviderError, match="Ollama request failed"):
@@ -116,13 +136,19 @@ class TestOllamaProvider:
             nonlocal called_url
             called_url = url
             return httpx.Response(
-                200, json={"response": "ok"},
+                200,
+                json={"response": "ok"},
                 request=httpx.Request("POST", url),
             )
+
         monkeypatch.setattr("promptdrift.providers.ollama.httpx.post", fake_post)
-        provider = OllamaProvider(ProviderConfig(
-            type="ollama", model="x", base_url="http://remote:11434",
-        ))
+        provider = OllamaProvider(
+            ProviderConfig(
+                type="ollama",
+                model="x",
+                base_url="http://remote:11434",
+            )
+        )
         provider.complete("test", temperature=0, max_output_tokens=10)
         assert called_url == "http://remote:11434/api/generate"
 
@@ -135,7 +161,9 @@ class TestMockProvider:
 
     def test_normalizes_whitespace(self):
         provider = MockProvider(ProviderConfig(type="mock", model="local-echo"))
-        response = provider.complete("  lots   of    spaces  ", temperature=0, max_output_tokens=500)
+        response = provider.complete(
+            "  lots   of    spaces  ", temperature=0, max_output_tokens=500
+        )
         assert "  " not in response.output  # Whitespace collapsed
 
     def test_zero_cost(self):

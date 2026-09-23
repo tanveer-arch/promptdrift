@@ -89,7 +89,16 @@ def orchestrate_check(
         except Exception:
             pass
 
+    current_git_sha = git.get_head_sha()
+    prompt_paths = [config.resolve_path(config_path, t.prompt) for t in tests]
+    current_prompt_hash = git.compute_prompt_hash(prompt_paths)
+
     impact = calculate_impact_radius(
-        report, baseline, scenario_metadata=scenario_metadata, skipped_ids=skipped_ids
+        report,
+        baseline,
+        scenario_metadata=scenario_metadata,
+        skipped_ids=skipped_ids,
+        current_git_sha=current_git_sha,
+        current_prompt_hash=current_prompt_hash,
     )
     return report, impact

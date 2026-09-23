@@ -1,4 +1,5 @@
 """Deterministic local provider for examples, tests, and offline onboarding."""
+
 from __future__ import annotations
 
 import re
@@ -17,7 +18,7 @@ class MockProvider(Provider):
         start = time.perf_counter()
         # The mock echoes explicit template values, making init usable without a network.
         output = re.sub(r"\s+", " ", prompt).strip()
-        output = output[:max_output_tokens * 4]
+        output = output[: max_output_tokens * 4]
         return ModelResponse(
             output=output,
             input_tokens=max(1, len(prompt.split())),

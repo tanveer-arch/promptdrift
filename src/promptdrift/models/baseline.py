@@ -25,4 +25,6 @@ class Baseline(BaseModel):
     generated_at: datetime
     provider: dict[str, str]
     prompt_revision: str | None = None
+    git_sha: str | None = None
+    prompt_hash: str | None = None
     tests: dict[str, BaselineTest]

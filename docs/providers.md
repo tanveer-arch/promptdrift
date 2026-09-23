@@ -110,6 +110,7 @@ Providers implement a single interface:
 from promptdrift.providers.base import Provider
 from promptdrift.models.result import ModelResponse
 
+
 class MyProvider(Provider):
     def complete(self, prompt: str, *, temperature: float, max_output_tokens: int) -> ModelResponse:
         # Call your backend and return a normalized response

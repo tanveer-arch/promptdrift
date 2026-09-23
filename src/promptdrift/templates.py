@@ -1,4 +1,5 @@
 """Safe deterministic Jinja prompt template rendering."""
+
 from __future__ import annotations
 
 from pathlib import Path

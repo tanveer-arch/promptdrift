@@ -88,7 +88,8 @@ class TestDiscoveryAndLearning:
             ),
         ]
         scenarios = discover_scenarios(interactions)
-        assert len(scenarios) == 2
+        # v0.3: full-input fingerprinting → different inputs are separate scenarios
+        assert len(scenarios) == 3
         categories = {s.category for s in scenarios}
         assert "refund" in categories
         assert "escalation" in categories

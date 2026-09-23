@@ -317,16 +317,31 @@ def check(
 @app.command()
 def accept(
     config: Annotated[str, typer.Option("--config", "-c")] = "promptdrift.yaml",
-    force: Annotated[bool, typer.Option(help="Overwrite existing baseline without confirmation.")] = False,
+    scenario: Annotated[
+        list[str], typer.Option("--scenario", "-s", help="Selectively accept specific scenarios.")
+    ] = [],
+    changed: Annotated[
+        bool, typer.Option("--changed", help="Accept all CHANGED_BUT_VALID scenarios.")
+    ] = False,
+    accept_regressions: Annotated[
+        bool, typer.Option("--accept-regressions", help="Accept REGRESSED scenarios.")
+    ] = False,
+    force: Annotated[
+        bool, typer.Option(help="Overwrite existing baseline without confirmation.")
+    ] = False,
     json_output: Annotated[bool, typer.Option("--json")] = False,
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
 ) -> None:
     """Accept current behavior as the new canonical baseline."""
-    result = _run(config, with_baseline=False, verbose=verbose)
-    if not result:
-        return
-    loaded, config_path, report = result
     try:
+        from promptdrift.config import load_config
+        from promptdrift.engine.accept import selective_accept
+        from promptdrift.engine.baseline import load_baseline
+        from promptdrift.engine.baseline_history import archive_baseline
+        from promptdrift.engine.check import orchestrate_check
+
+        loaded, config_path = load_config(config)
+
         path = loaded.resolve_path(config_path, loaded.baseline.path)
         if path.exists() and not force:
             confirmed = typer.confirm(
@@ -335,7 +350,34 @@ def accept(
             if not confirmed:
                 console.print("[yellow]Aborted.[/]")
                 return
-        write_baseline(path, report, force=True)
+
+        if not path.exists():
+            # If baseline doesn't exist, we fallback to old behavior (accept all)
+            result = _run(config, with_baseline=False, verbose=verbose)
+            if not result:
+                return
+            _, _, report = result
+            from promptdrift.engine.baseline import write_baseline
+
+            write_baseline(path, report, force=True)
+        else:
+            # Baseline exists, do selective accept
+            report, impact = orchestrate_check(loaded, config_path)
+            current_baseline = load_baseline(path)
+
+            new_baseline = selective_accept(
+                current_baseline=current_baseline,
+                report=report,
+                impact=impact,
+                scenario_ids=scenario if scenario else None,
+                accept_changed=changed,
+                accept_regressions=accept_regressions,
+            )
+
+            archive_baseline(path)
+            content = new_baseline.model_dump_json(indent=2) + "\n"
+            path.write_text(content, encoding="utf-8")
+
         if json_output:
             typer.echo(json.dumps({"baseline": str(path), "status": "accepted"}, indent=2))
         else:
@@ -392,6 +434,49 @@ def baseline(
             console.print(f"[green]Baseline written:[/] {path}")
     except PromptDriftError as error:
         _exit_error(error, verbose)
+
+
+@app.command()
+def baselines(
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """List canonical baseline and archived history."""
+    import json
+
+    from promptdrift.engine.baseline import load_baseline
+    from promptdrift.engine.baseline_history import list_baseline_history
+
+    paths = list_baseline_history()
+
+    if json_output:
+        history = [{"path": str(p)} for p in paths]
+        typer.echo(json.dumps({"history": history}, indent=2))
+        return
+
+    from rich.table import Table
+
+    table = Table(title="Baseline History")
+    table.add_column("Date", style="cyan")
+    table.add_column("Git SHA", style="green")
+    table.add_column("Prompt Hash", style="yellow")
+    table.add_column("Scenarios")
+
+    for p in paths:
+        try:
+            b = load_baseline(p)
+            table.add_row(
+                b.generated_at.strftime("%Y-%m-%d %H:%M:%S"),
+                b.git_sha[:8] if b.git_sha else "-",
+                b.prompt_hash[:8] if b.prompt_hash else "-",
+                str(len(b.tests)),
+            )
+        except Exception:
+            table.add_row(p.name, "error", "-", "-")
+
+    if not paths:
+        console.print("No baseline history found.")
+    else:
+        console.print(table)
 
 
 @app.command()

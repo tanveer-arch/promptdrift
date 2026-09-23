@@ -15,13 +15,20 @@ from promptdrift.errors import BaselineError
 from promptdrift.models import Baseline, BaselineTest, RegressionReport
 
 
-def baseline_from_report(report: RegressionReport, prompt_revision: str | None = None) -> Baseline:
+def baseline_from_report(
+    report: RegressionReport,
+    prompt_revision: str | None = None,
+    git_sha: str | None = None,
+    prompt_hash: str | None = None,
+) -> Baseline:
     return Baseline(
         schema_version=2,
         promptdrift_version=__version__,
         generated_at=datetime.now(UTC),
         provider={"type": report.provider, "model": report.model},
         prompt_revision=prompt_revision,
+        git_sha=git_sha,
+        prompt_hash=prompt_hash,
         tests={
             run.test_id: BaselineTest(
                 output_hash=hashlib.sha256(run.output.encode()).hexdigest(),
@@ -44,15 +51,27 @@ def baseline_from_report(report: RegressionReport, prompt_revision: str | None =
 
 
 def write_baseline(
-    path: Path, report: RegressionReport, *, force: bool = False, prompt_revision: str | None = None
+    path: Path,
+    report: RegressionReport,
+    *,
+    force: bool = False,
+    prompt_revision: str | None = None,
+    git_sha: str | None = None,
+    prompt_hash: str | None = None,
 ) -> None:
     if path.exists() and not force:
         raise BaselineError(f"Baseline already exists: {path}. Use --force to replace it.")
+
+    if path.is_file():
+        from promptdrift.engine.baseline_history import archive_baseline
+
+        archive_baseline(path)
+
     path.parent.mkdir(parents=True, exist_ok=True)
-    content = (
-        baseline_from_report(report, prompt_revision=prompt_revision).model_dump_json(indent=2)
-        + "\n"
+    baseline_obj = baseline_from_report(
+        report, prompt_revision=prompt_revision, git_sha=git_sha, prompt_hash=prompt_hash
     )
+    content = baseline_obj.model_dump_json(indent=2) + "\n"
     path.write_text(content, encoding="utf-8")
 
 
