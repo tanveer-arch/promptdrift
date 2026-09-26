@@ -353,13 +353,17 @@ def accept(
 
         if not path.exists():
             # If baseline doesn't exist, we fallback to old behavior (accept all)
-            result = _run(config, with_baseline=False, verbose=verbose)
-            if not result:
-                return
-            _, _, report = result
+            # but we still need git_sha and prompt_hash
+            report, impact = orchestrate_check(loaded, config_path)
             from promptdrift.engine.baseline import write_baseline
 
-            write_baseline(path, report, force=True)
+            write_baseline(
+                path,
+                report,
+                force=True,
+                git_sha=impact.current_git_sha,
+                prompt_hash=impact.current_prompt_hash,
+            )
         else:
             # Baseline exists, do selective accept
             report, impact = orchestrate_check(loaded, config_path)

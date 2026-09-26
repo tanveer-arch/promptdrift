@@ -40,11 +40,16 @@ promptdrift init
 
 PromptDrift scans your repository context and sets up starter files.
 
-### 1. Log example interactions
-```bash
-promptdrift capture --input "How do I cancel my order?" --output "You can cancel within 24 hours."
+### 1. Log example interactions from Production
+Use the PromptDrift CLI or the built-in async/sync `CaptureRecorder` SDK to capture your production traffic. 
+
+```python
+from promptdrift.capture.recorder import CaptureRecorder, CaptureConfig
+
+recorder = CaptureRecorder(CaptureConfig(enabled=True))
+# Safely wraps your OpenAI client, capturing representative traffic with a rolling retention cap (default 10,000 interactions).
+# Redacts raw outputs and uses deterministic sampling to avoid duplicating identical edge cases.
 ```
-*(Note: PromptDrift currently logs interactions via explicit CLI input. Automatic SDK/proxy capture is planned for a future release.)*
 
 ### 2. Turn captures into candidate regression scenarios
 ```bash
@@ -177,7 +182,8 @@ jobs:
 | `promptdrift suggest` | Suggest deterministic contracts for discovered scenarios |
 | `promptdrift promote` | Promote candidate scenarios into committed regression tests |
 | `promptdrift check` | Git-aware scenario execution and Impact Radius report |
-| `promptdrift accept` | Accept intentional behavior updates as the new baseline |
+| `promptdrift accept` | Accept intentional behavior updates as the new baseline (`--changed`, `--scenario`, `--accept-regressions`) |
+| `promptdrift baselines` | List version-controlled baseline history and previous canonical states |
 | `promptdrift test` | Run behavioral contracts suite (backward compatible) |
 | `promptdrift baseline` | Capture canonical version-controlled baseline |
 | `promptdrift diff` | Compare current behavior against baseline |

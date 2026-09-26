@@ -12,3 +12,8 @@ promptdrift-report.html
 *.db
 .venv/
 .env
+
+# Transient test artifacts
+test_*.db
+test_*.json
+test_*.sqlite

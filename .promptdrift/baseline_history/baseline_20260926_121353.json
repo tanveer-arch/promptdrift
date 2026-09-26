@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "promptdrift_version": "0.3.0",
-  "generated_at": "2026-09-23T17:44:29.791538Z",
+  "generated_at": "2026-09-26T12:13:53.806006Z",
   "provider": {
     "type": "mock",
     "model": "local-echo"
@@ -17,7 +17,7 @@
         "contains": true
       },
       "metrics": {
-        "latency_ms": 0.02,
+        "latency_ms": 0.01,
         "input_tokens": 8,
         "output_tokens": 8,
         "estimated_cost_usd": 0.0

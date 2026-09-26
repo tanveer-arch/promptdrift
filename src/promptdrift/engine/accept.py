@@ -77,8 +77,9 @@ def selective_accept(
     # Return a new baseline with the merged tests and updated revision info
     from promptdrift.git import GitContext
 
-    git_ctx = GitContext()
-    current_git_sha = git_ctx.get_head_sha()
+    current_git_sha = (
+        impact.current_git_sha if impact.current_git_sha else GitContext().get_head_sha()
+    )
 
     return Baseline(
         schema_version=new_baseline_obj.schema_version,
@@ -87,6 +88,6 @@ def selective_accept(
         provider=new_baseline_obj.provider,
         prompt_revision=new_baseline_obj.prompt_revision,
         git_sha=current_git_sha,
-        prompt_hash=None,  # will be populated by caller if available, or left None
+        prompt_hash=impact.current_prompt_hash,
         tests=merged_tests,
     )

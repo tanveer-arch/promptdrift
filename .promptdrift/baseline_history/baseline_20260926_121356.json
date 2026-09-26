@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
-  "promptdrift_version": "0.2.0",
-  "generated_at": "2026-09-23T17:35:11.436678Z",
+  "promptdrift_version": "0.3.0",
+  "generated_at": "2026-09-26T12:13:56.420883Z",
   "provider": {
     "type": "mock",
     "model": "m"

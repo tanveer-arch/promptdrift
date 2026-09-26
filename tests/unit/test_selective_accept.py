@@ -210,3 +210,33 @@ class TestSelectiveAccept:
 
         assert new_b.tests["t1"].output_hash != "h1"
         assert new_b.tests["t2"].output_hash == "h2"
+
+    def test_preserves_metadata(self, current_baseline, new_report):
+        from promptdrift.impact import ScenarioImpact
+
+        impact = ImpactRadiusReport(
+            total_scenarios=1,
+            regressed=0,
+            improved=0,
+            unchanged=0,
+            changed_but_valid=1,
+            new_scenarios=0,
+            missing_scenarios=0,
+            impact_radius_percentage=100.0,
+            current_git_sha="new_sha",
+            current_prompt_hash="new_prompt",
+            scenarios=[
+                ScenarioImpact(
+                    scenario_id="t1",
+                    classification="CHANGED_BUT_VALID",
+                    current_status="PASS",
+                    output_changed=True,
+                )
+            ],
+        )
+
+        assert current_baseline.prompt_hash == "old_prompt"
+
+        new_b = selective_accept(current_baseline, new_report, impact, accept_changed=True)
+        assert new_b.git_sha == "new_sha"
+        assert new_b.prompt_hash == "new_prompt"
