@@ -6,7 +6,14 @@ import time
 
 import httpx
 
-from promptdrift.errors import ProviderError
+from promptdrift.errors import (
+    ProviderAuthError,
+    ProviderConnectionError,
+    ProviderError,
+    ProviderRateLimitError,
+    ProviderResponseError,
+    ProviderTimeoutError,
+)
 from promptdrift.models.result import ModelResponse
 
 from .base import Provider
@@ -44,7 +51,27 @@ class OllamaProvider(Provider):
                 resolved_model=payload.get("model"),
                 estimated_cost_usd=0.0,
             )
-        except (httpx.HTTPError, ValueError, KeyError, TypeError, AttributeError) as exc:
-            raise ProviderError(
+        except httpx.TimeoutException as exc:
+            raise ProviderTimeoutError(f"Ollama request failed: timeout ({type(exc).__name__})") from exc
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            if status in (401, 403):
+                raise ProviderAuthError(
+                    f"Ollama request failed: HTTP {status} (authentication error)"
+                ) from exc
+            if status == 429:
+                raise ProviderRateLimitError(
+                    f"Ollama request failed: HTTP {status} (rate limit exceeded)"
+                ) from exc
+            raise ProviderError(f"Ollama request failed: HTTP {status}") from exc
+        except (httpx.ConnectError, httpx.NetworkError) as exc:
+            raise ProviderConnectionError(
                 f"Ollama request failed: {type(exc).__name__}. Is Ollama running?"
             ) from exc
+        except httpx.HTTPError as exc:
+            raise ProviderError(f"Ollama request failed: {type(exc).__name__}") from exc
+        except (ValueError, KeyError, TypeError, AttributeError) as exc:
+            raise ProviderResponseError(
+                f"Ollama request failed: malformed response ({type(exc).__name__})"
+            ) from exc
+

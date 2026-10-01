@@ -7,7 +7,14 @@ import time
 
 import httpx
 
-from promptdrift.errors import ProviderError
+from promptdrift.errors import (
+    ProviderAuthError,
+    ProviderConnectionError,
+    ProviderError,
+    ProviderRateLimitError,
+    ProviderResponseError,
+    ProviderTimeoutError,
+)
 from promptdrift.models.result import ModelResponse
 
 from .base import Provider
@@ -21,7 +28,7 @@ class OpenAIProvider(Provider):
         env_name = self.config.api_key_env or "OPENAI_API_KEY"
         api_key = os.environ.get(env_name)
         if not api_key:
-            raise ProviderError(f"{env_name} is not set. Set it before using the OpenAI provider.")
+            raise ProviderAuthError(f"{env_name} is not set. Set it before using the OpenAI provider.")
         start = time.perf_counter()
         try:
             response = httpx.post(
@@ -53,8 +60,26 @@ class OpenAIProvider(Provider):
                 system_fingerprint=payload.get("system_fingerprint"),
                 estimated_cost_usd=None,
             )
+        except httpx.TimeoutException as exc:
+            raise ProviderTimeoutError(f"OpenAI request failed: timeout ({type(exc).__name__})") from exc
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            if status in (401, 403):
+                raise ProviderAuthError(
+                    f"OpenAI request failed: HTTP {status} (authentication error). Check your API key."
+                ) from exc
+            if status == 429:
+                raise ProviderRateLimitError(
+                    f"OpenAI request failed: HTTP {status} (rate limit exceeded). Check your quota."
+                ) from exc
+            raise ProviderError(f"OpenAI request failed: HTTP {status}") from exc
+        except (httpx.ConnectError, httpx.NetworkError) as exc:
+            raise ProviderConnectionError(
+                f"OpenAI request failed: connection error ({type(exc).__name__})"
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise ProviderError(f"OpenAI request failed: {type(exc).__name__}") from exc
         except (
-            httpx.HTTPError,
             KeyError,
             ValueError,
             IndexError,
@@ -62,4 +87,7 @@ class OpenAIProvider(Provider):
             AttributeError,
         ) as exc:
             # Do not include response bodies: they can contain sensitive prompt data.
-            raise ProviderError(f"OpenAI request failed: {type(exc).__name__}") from exc
+            raise ProviderResponseError(
+                f"OpenAI request failed: malformed response ({type(exc).__name__})"
+            ) from exc
+
