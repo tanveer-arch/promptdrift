@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 - `monitor`: fresh full-suite repeated probes independent of Git changes, with evidence-based diagnoses and explicit provider-error handling.
+- Provider error taxonomy (`ProviderAuthError`, `ProviderRateLimitError`, `ProviderTimeoutError`, `ProviderConnectionError`, `ProviderResponseError`) normalizing provider exceptions into safe, non-secret diagnostic categories (#14).
 - Schema-v3 baselines with per-case request, generation, provider and contract fingerprints; v1/v2 loading remains supported without invented provenance.
 - `history`: bounded project-local monitoring history; `demo`: a temporary loopback-only synthetic drift incident through the real adapter.
 - Opt-in Action monitor mode and deduplicated scheduled/manual GitHub failure issues; synthetic and real-provider monitoring examples.
