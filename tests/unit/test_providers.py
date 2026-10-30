@@ -3,7 +3,14 @@
 import httpx
 import pytest
 
-from promptdrift.errors import ProviderError
+from promptdrift.errors import (
+    ProviderAuthError,
+    ProviderConnectionError,
+    ProviderError,
+    ProviderRateLimitError,
+    ProviderResponseError,
+    ProviderTimeoutError,
+)
 from promptdrift.models.config import ProviderConfig
 from promptdrift.providers import create_provider
 from promptdrift.providers.mock import MockProvider
@@ -101,6 +108,62 @@ class TestOpenAIProvider:
         with pytest.raises(ProviderError) as exc_info:
             provider.complete("test", temperature=0, max_output_tokens=10)
         assert "sk-super-secret" not in str(exc_info.value)
+        assert isinstance(exc_info.value, ProviderConnectionError)
+
+    def test_auth_error_raises_provider_auth_error(self, monkeypatch):
+        def fake_post(*args, **kwargs):
+            return httpx.Response(
+                401,
+                json={"error": {"message": "Invalid API key provided", "type": "invalid_request_error"}},
+                request=httpx.Request("POST", "https://example.test"),
+            )
+
+        monkeypatch.setenv("TEST_KEY", "test-key-val")
+        monkeypatch.setattr("promptdrift.providers.openai.httpx.post", fake_post)
+        provider = OpenAIProvider(ProviderConfig(type="openai", model="x", api_key_env="TEST_KEY"))
+        with pytest.raises(ProviderAuthError) as exc_info:
+            provider.complete("test", temperature=0, max_output_tokens=10)
+        # Verify response body and key are not leaked in message
+        assert "Invalid API key provided" not in str(exc_info.value)
+        assert "test-key-val" not in str(exc_info.value)
+
+    def test_rate_limit_error_raises_provider_rate_limit_error(self, monkeypatch):
+        def fake_post(*args, **kwargs):
+            return httpx.Response(
+                429,
+                json={"error": {"message": "Rate limit exceeded"}},
+                request=httpx.Request("POST", "https://example.test"),
+            )
+
+        monkeypatch.setenv("TEST_KEY", "k")
+        monkeypatch.setattr("promptdrift.providers.openai.httpx.post", fake_post)
+        provider = OpenAIProvider(ProviderConfig(type="openai", model="x", api_key_env="TEST_KEY"))
+        with pytest.raises(ProviderRateLimitError):
+            provider.complete("test", temperature=0, max_output_tokens=10)
+
+    def test_timeout_raises_provider_timeout_error(self, monkeypatch):
+        def fake_post(*args, **kwargs):
+            raise httpx.ReadTimeout("Request timed out")
+
+        monkeypatch.setenv("TEST_KEY", "k")
+        monkeypatch.setattr("promptdrift.providers.openai.httpx.post", fake_post)
+        provider = OpenAIProvider(ProviderConfig(type="openai", model="x", api_key_env="TEST_KEY"))
+        with pytest.raises(ProviderTimeoutError):
+            provider.complete("test", temperature=0, max_output_tokens=10)
+
+    def test_malformed_response_raises_provider_response_error(self, monkeypatch):
+        def fake_post(*args, **kwargs):
+            return httpx.Response(
+                200,
+                json={"unexpected": "structure"},
+                request=httpx.Request("POST", "https://example.test"),
+            )
+
+        monkeypatch.setenv("TEST_KEY", "k")
+        monkeypatch.setattr("promptdrift.providers.openai.httpx.post", fake_post)
+        provider = OpenAIProvider(ProviderConfig(type="openai", model="x", api_key_env="TEST_KEY"))
+        with pytest.raises(ProviderResponseError):
+            provider.complete("test", temperature=0, max_output_tokens=10)
 
 
 class TestOllamaProvider:
@@ -151,6 +214,54 @@ class TestOllamaProvider:
         )
         provider.complete("test", temperature=0, max_output_tokens=10)
         assert called_url == "http://remote:11434/api/generate"
+
+    def test_auth_error_raises_provider_auth_error(self, monkeypatch):
+        def fake_post(*args, **kwargs):
+            return httpx.Response(
+                401,
+                json={"error": "unauthorized access"},
+                request=httpx.Request("POST", "http://localhost:11434/api/generate"),
+            )
+
+        monkeypatch.setattr("promptdrift.providers.ollama.httpx.post", fake_post)
+        provider = OllamaProvider(ProviderConfig(type="ollama", model="x"))
+        with pytest.raises(ProviderAuthError):
+            provider.complete("test", temperature=0, max_output_tokens=10)
+
+    def test_rate_limit_error_raises_provider_rate_limit_error(self, monkeypatch):
+        def fake_post(*args, **kwargs):
+            return httpx.Response(
+                429,
+                json={"error": "too many requests"},
+                request=httpx.Request("POST", "http://localhost:11434/api/generate"),
+            )
+
+        monkeypatch.setattr("promptdrift.providers.ollama.httpx.post", fake_post)
+        provider = OllamaProvider(ProviderConfig(type="ollama", model="x"))
+        with pytest.raises(ProviderRateLimitError):
+            provider.complete("test", temperature=0, max_output_tokens=10)
+
+    def test_timeout_raises_provider_timeout_error(self, monkeypatch):
+        def fake_post(*args, **kwargs):
+            raise httpx.ConnectTimeout("connection timed out")
+
+        monkeypatch.setattr("promptdrift.providers.ollama.httpx.post", fake_post)
+        provider = OllamaProvider(ProviderConfig(type="ollama", model="x"))
+        with pytest.raises(ProviderTimeoutError):
+            provider.complete("test", temperature=0, max_output_tokens=10)
+
+    def test_malformed_response_raises_provider_response_error(self, monkeypatch):
+        def fake_post(*args, **kwargs):
+            return httpx.Response(
+                200,
+                json={"not_response": 123},
+                request=httpx.Request("POST", "http://localhost:11434/api/generate"),
+            )
+
+        monkeypatch.setattr("promptdrift.providers.ollama.httpx.post", fake_post)
+        provider = OllamaProvider(ProviderConfig(type="ollama", model="x"))
+        with pytest.raises(ProviderResponseError):
+            provider.complete("test", temperature=0, max_output_tokens=10)
 
 
 class TestMockProvider:
