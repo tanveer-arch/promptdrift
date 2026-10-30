@@ -38,7 +38,29 @@ Passes if the forbidden string does **not** appear anywhere in the output.
   severity: warn
 ```
 
-**Use case:** Preventing the model from making promises, mentioning competitors, or using banned terms.
+**Use case:** Preventing the model from making promises, mentionning competitors, or using banned terms.
+
+### `starts_with`
+
+Passes if the output **starts with** the expected string.
+
+```yaml
+- type: starts_with
+  value: "Hello, "
+```
+
+**Use case:** Verifying structured conversational prefixes (e.g. "Assistant: ", "<json>") without complex regex.
+
+### `ends_with`
+
+Passes if the output **ends with** the expected string.
+
+```yaml
+- type: ends_with
+  value: "."
+```
+
+**Use case:** Ensuring required suffixes (e.g. "\n", "```") are present.
 
 ## Pattern Assertions
 
@@ -78,7 +100,7 @@ Passes if the output is parseable as valid JSON. No `value` is required.
 
 **Use case:** Ensuring structured outputs are valid JSON before checking their contents.
 
-### `json_schema`
+### `json_schem``
 
 Passes if the output is valid JSON **and** conforms to the given [JSON Schema](https://json-schema.org/).
 
@@ -161,12 +183,12 @@ Regex syntax and numeric limits are validated when loading configuration. JSON s
 
 | Severity | CI behavior | Report |
 | --- | --- | --- |
-| `fail` (default) | Exit code 1, blocks merge | Shown as ❌ |
+| `fail` (default) | Exit code 1, blocks merge | Shown as ❣ |
 | `warn` | Exit code 0 | Shown as ⚠️ |
 
 ## Combining Assertions
 
-A test case can have any number of assertions. All are evaluated independently — one failure does not prevent the others from running.
+A new test case can have any number of assertions. All are evaluated independently — one failure does not prevent the others from running.
 
 ```yaml
 assertions:
