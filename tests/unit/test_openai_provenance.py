@@ -204,6 +204,10 @@ def test_malformed_json_fails_safely(monkeypatch):
             "chat_completion_missing_message.json",
             "PRIVATE_MISSING_MESSAGE_SENTINEL",
         ),
+        (
+            "chat_completion_null_content.json",
+            "PRIVATE_NULL_CONTENT_SENTINEL",
+        ),
     ],
 )
 def test_invalid_response_shapes_fail_safely(monkeypatch, fixture_name, private_value):
@@ -225,3 +229,49 @@ def test_invalid_response_shapes_fail_safely(monkeypatch, fixture_name, private_
         )
 
     assert private_value not in str(error.value)
+def test_null_usage_is_handled_safely(monkeypatch):
+    _install_payload(monkeypatch, "chat_completion_null_usage.json")
+
+    provider = OpenAIProvider(
+        ProviderConfig(
+            type="openai",
+            model="configured-model",
+            api_key_env="TEST_OPENAI_KEY",
+        )
+    )
+
+    response = provider.complete(
+        "test prompt",
+        temperature=0,
+        max_output_tokens=100,
+    )
+
+    assert response.output == "Hello NULL_USAGE_SENTINEL"
+    assert response.input_tokens is None
+    assert response.output_tokens is None
+    assert response.resolved_model == "test-model"
+    assert response.system_fingerprint == "fp_test_123"
+
+
+def test_non_standard_whitespace_is_preserved(monkeypatch):
+    _install_payload(monkeypatch, "chat_completion_whitespace.json")
+
+    provider = OpenAIProvider(
+        ProviderConfig(
+            type="openai",
+            model="configured-model",
+            api_key_env="TEST_OPENAI_KEY",
+        )
+    )
+
+    response = provider.complete(
+        "test prompt",
+        temperature=0,
+        max_output_tokens=100,
+    )
+
+    assert response.output == "  \n\t  Hello WHITESPACE_SENTINEL  \r\n\t  "
+    assert response.input_tokens == 5
+    assert response.output_tokens == 3
+    assert response.resolved_model == "test-model"
+    assert response.system_fingerprint == "fp_test_123"

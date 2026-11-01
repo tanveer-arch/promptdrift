@@ -1,0 +1,17 @@
+{
+  "id": "chatcmpl-test-null-usage",
+  "object": "chat.completion",
+  "model": "test-model",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Hello NULL_USAGE_SENTINEL"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": null,
+  "system_fingerprint": "fp_test_123"
+}
