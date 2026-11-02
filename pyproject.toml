@@ -58,6 +58,7 @@ packages = ["src/promptdrift"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 markers = ["live: tests requiring a real configured provider"]
 
 [tool.ruff]
