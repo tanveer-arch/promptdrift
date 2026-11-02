@@ -125,15 +125,10 @@ def evaluate_assertion(assertion: Assertion, response: ModelResponse) -> Evaluat
 
         if within_tolerance:
             reason = (
-                f"Latency {actual:g}ms passed "
-                f"(within {tolerance:g}% tolerance of {expected:g}ms)."
+                f"Latency {actual:g}ms passed (within {tolerance:g}% tolerance of {expected:g}ms)."
             )
         else:
-            reason = (
-                "Latency limit met."
-                if passed
-                else "Latency limit exceeded."
-            )
+            reason = "Latency limit met." if passed else "Latency limit exceeded."
 
         return _result(assertion, passed, expected, actual, reason)
     if kind == "cost_usd":
@@ -151,11 +146,7 @@ def evaluate_assertion(assertion: Assertion, response: ModelResponse) -> Evaluat
                 f"(within {tolerance:g}% tolerance of ${expected:g})."
             )
         else:
-            reason = (
-                "Estimated cost limit met."
-                if passed
-                else "Estimated cost limit exceeded."
-            )
+            reason = "Estimated cost limit met." if passed else "Estimated cost limit exceeded."
 
         return _result(assertion, passed, expected, actual, reason)
     raise EvaluationError(f"Unsupported assertion type: {kind}")
