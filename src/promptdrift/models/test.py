@@ -45,6 +45,7 @@ class Assertion(BaseModel):
     value: Any | None = None
     schema_: dict[str, Any] | None = Field(default=None, alias="schema")
     name: str | None = None
+    tolerance_percent: float | None = Field(default=None, ge=0)
     severity: Literal["fail", "warn"] = "fail"
 
     @model_validator(mode="after")
