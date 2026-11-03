@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl-test-whitespace",
+  "object": "chat.completion",
+  "model": "test-model",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "  \n\t  Hello WHITESPACE_SENTINEL  \r\n\t  "
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 5,
+    "completion_tokens": 3,
+    "total_tokens": 8
+  },
+  "system_fingerprint": "fp_test_123"
+}
