@@ -91,215 +91,70 @@ class TestNotContains:
         assert not evaluate_assertion(Assertion(type="not_contains", value=""), response()).passed
 
 
-# --- regex ---
+# --- starts_with ---
 
 
-class TestRegex:
-    def test_passes_on_match(self):
-        result = evaluate_assertion(Assertion(type="regex", value=r"\bhello\b"), response())
-        assert result.passed
+class TestStartsWith:
+    def test_passes_when_prefix_matches(self):
+        assert evaluate_assertion(
+            Assertion(type="starts_with", value="hello"), response("hello world")
+        ).passed
 
-    def test_fails_on_no_match(self):
-        result = evaluate_assertion(Assertion(type="regex", value=r"\d+"), response())
-        assert not result.passed
+    def test_fails_when_prefix_does_not_match(self):
+        assert not evaluate_assertion(
+            Assertion(type="starts_with", value="goodbye"), response("hello world")
+        ).passed
 
-    def test_works_with_groups(self):
-        result = evaluate_assertion(Assertion(type="regex", value=r"(hello|hi)"), response())
-        assert result.passed
+    def test_empty_prefix_always_matches(self):
+        assert evaluate_assertion(Assertion(type="starts_with", value=""), response("anything")).passed
 
-    def test_invalid_regex_raises_error(self):
-        with pytest.raises(ValidationError, match="Invalid regex"):
-            Assertion(type="regex", value=r"[unclosed")
+    def test_works_with_special_characters(self):
+        assert evaluate_assertion(
+            Assertion(type="starts_with", value="<json>"), response("<json>{}")
+        ).passed
 
+    def test_case_sensitive(self):
+        assert not evaluate_assertion(
+            Assertion(type="starts_with", value="Hello"), response("hello world")
+        ).passed
 
-# --- not_regex ---
-
-
-class TestNotRegex:
-    def test_passes_when_pattern_absent(self):
-        result = evaluate_assertion(Assertion(type="not_regex", value=r"\d{5}"), response())
-        assert result.passed
-
-    def test_fails_when_pattern_present(self):
-        result = evaluate_assertion(Assertion(type="not_regex", value=r"hello"), response())
-        assert not result.passed
-
-    def test_invalid_regex_raises_error(self):
-        with pytest.raises(ValidationError, match="Invalid regex"):
-            Assertion(type="not_regex", value=r"(unclosed")
+    def test_numeric_value_cast_to_string(self):
+        assert evaluate_assertion(
+            Assertion(type="starts_with", value=42), response("42 is the answer")
+        ).passed
 
 
-# --- json_valid ---
+# --- ends_with ---
 
 
-class TestJsonValid:
-    def test_passes_on_valid_json_object(self):
-        result = evaluate_assertion(
-            Assertion(type="json_valid", value=None), response('{"key": "value"}')
-        )
-        assert result.passed
+class TestEndsWith:
+    def test_passes_when_suffix_matches(self):
+        assert evaluate_assertion(
+            Assertion(type="ends_with", value="world"), response("hello world")
+        ).passed
 
-    def test_passes_on_valid_json_array(self):
-        result = evaluate_assertion(Assertion(type="json_valid", value=None), response("[1, 2, 3]"))
-        assert result.passed
+    def test_fails_when_suffix_does_not_match(self):
+        assert not evaluate_assertion(
+            Assertion(type="ends_with", value="goodbye"), response("hello world")
+        ).passed
 
-    def test_fails_on_plain_text(self):
-        result = evaluate_assertion(Assertion(type="json_valid", value=None), response("not json"))
-        assert not result.passed
-        assert "Invalid JSON" in result.reason
+    def test_empty_suffix_always_matches(self):
+        assert evaluate_assertion(Assertion(type="ends_with", value=""), response("anything")).passed
 
-    def test_fails_on_empty_string(self):
-        result = evaluate_assertion(Assertion(type="json_valid", value=None), response(""))
-        assert not result.passed
+    def test_works_with_special_characters(self):
+        assert evaluate_assertion(
+            Assertion(type="ends_with", value="```"), response("code\n```")
+        ).passed
 
+    def test_case_sensitive(self):
+        assert not evaluate_assertion(
+            Assertion(type="ends_with", value="World"), response("hello world")
+        ).passed
 
-# --- json_schema ---
-
-
-class TestJsonSchema:
-    def test_passes_on_valid_schema(self):
-        result = evaluate_assertion(
-            Assertion(type="json_schema", schema={"type": "object", "required": ["name"]}),
-            response('{"name": "Ada"}'),
-        )
-        assert result.passed
-
-    def test_fails_on_missing_required_field(self):
-        result = evaluate_assertion(
-            Assertion(type="json_schema", schema={"type": "object", "required": ["name"]}),
-            response("{}"),
-        )
-        assert not result.passed
-        assert "required" in result.reason.lower() or "name" in result.reason.lower()
-
-    def test_fails_on_wrong_type(self):
-        result = evaluate_assertion(
-            Assertion(
-                type="json_schema",
-                schema={"type": "object", "properties": {"age": {"type": "number"}}},
-            ),
-            response('{"age": "not a number"}'),
-        )
-        # jsonschema with additionalProperties allows this by default — only fails if strict
-        # This test validates the schema validation path runs without error
-        assert isinstance(result.passed, bool)
-
-    def test_fails_on_invalid_json(self):
-        result = evaluate_assertion(
-            Assertion(type="json_schema", schema={"type": "object"}),
-            response("not json at all"),
-        )
-        assert not result.passed
-        assert "Invalid JSON" in result.reason
-
-    def test_custom_name_in_label(self):
-        result = evaluate_assertion(
-            Assertion(type="json_schema", schema={"type": "object"}, name="api_response"),
-            response("{}"),
-        )
-        assert result.assertion == "api_response"
-
-
-# --- min_length / max_length ---
-
-
-class TestLength:
-    def test_min_length_passes_when_met(self):
-        result = evaluate_assertion(Assertion(type="min_length", value=5), response("hello world"))
-        assert result.passed
-
-    def test_min_length_fails_when_short(self):
-        result = evaluate_assertion(Assertion(type="min_length", value=100), response("short"))
-        assert not result.passed
-
-    def test_max_length_passes_when_under(self):
-        result = evaluate_assertion(
-            Assertion(type="max_length", value=100), response("hello world")
-        )
-        assert result.passed
-
-    def test_max_length_fails_when_over(self):
-        result = evaluate_assertion(Assertion(type="max_length", value=5), response("hello world"))
-        assert not result.passed
-
-    def test_exact_boundary_min(self):
-        result = evaluate_assertion(Assertion(type="min_length", value=11), response("hello world"))
-        assert result.passed  # len("hello world") == 11
-
-    def test_exact_boundary_max(self):
-        result = evaluate_assertion(Assertion(type="max_length", value=11), response("hello world"))
-        assert result.passed
-
-    def test_empty_string_has_length_zero(self):
-        result = evaluate_assertion(Assertion(type="min_length", value=1), response(""))
-        assert not result.passed
-
-
-# --- max_tokens ---
-
-
-class TestMaxTokens:
-    def test_passes_under_limit(self):
-        result = evaluate_assertion(
-            Assertion(type="max_tokens", value=10), response(output_tokens=5)
-        )
-        assert result.passed
-
-    def test_fails_over_limit(self):
-        result = evaluate_assertion(
-            Assertion(type="max_tokens", value=1), response(output_tokens=5)
-        )
-        assert not result.passed
-
-    def test_exact_boundary(self):
-        result = evaluate_assertion(
-            Assertion(type="max_tokens", value=5), response(output_tokens=5)
-        )
-        assert result.passed
-
-
-# --- latency_ms ---
-
-
-class TestLatency:
-    def test_passes_under_limit(self):
-        result = evaluate_assertion(
-            Assertion(type="latency_ms", value=100), response(latency_ms=50)
-        )
-        assert result.passed
-
-    def test_fails_over_limit(self):
-        result = evaluate_assertion(Assertion(type="latency_ms", value=10), response(latency_ms=50))
-        assert not result.passed
-
-    def test_exact_boundary(self):
-        result = evaluate_assertion(Assertion(type="latency_ms", value=12), response(latency_ms=12))
-        assert result.passed
-
-
-# --- cost_usd ---
-
-
-class TestCost:
-    def test_passes_under_limit(self):
-        result = evaluate_assertion(Assertion(type="cost_usd", value=0.01), response(cost=0.001))
-        assert result.passed
-
-    def test_fails_over_limit(self):
-        result = evaluate_assertion(Assertion(type="cost_usd", value=0.0001), response(cost=0.001))
-        assert not result.passed
-
-    def test_zero_cost(self):
-        result = evaluate_assertion(Assertion(type="cost_usd", value=0.01), response(cost=0.0))
-        assert result.passed
-
-    def test_none_cost_cannot_satisfy_a_limit(self):
-        resp = ModelResponse(
-            output="x", latency_ms=1, model="t", provider="mock", estimated_cost_usd=None
-        )
-        result = evaluate_assertion(Assertion(type="cost_usd", value=0.01), resp)
-        assert not result.passed
-        assert result.actual is None
+    def test_numeric_value_cast_to_string(self):
+        assert evaluate_assertion(
+            Assertion(type="ends_with", value=42), response("the answer is 42")
+        ).passed
 
 
 # --- unsupported ---

@@ -14,6 +14,8 @@ ASSERTION_TYPES = {
     "exact_match",
     "contains",
     "not_contains",
+    "starts_with",
+    "ends_with",
     "regex",
     "not_regex",
     "json_valid",
@@ -32,6 +34,8 @@ class Assertion(BaseModel):
         "exact_match",
         "contains",
         "not_contains",
+        "starts_with",
+        "ends_with",
         "regex",
         "not_regex",
         "json_valid",
@@ -71,7 +75,7 @@ class Assertion(BaseModel):
                 raise ValueError("Numeric assertions require a finite non-negative number")
             if (
                 self.type in {"min_length", "max_length", "max_tokens"}
-                and int(self.value) != self.value
+                and int(self.value)!= self.value
             ):
                 raise ValueError("Length and token assertions require an integer")
         return self
@@ -137,3 +141,4 @@ class TestCase(BaseModel):
                 "optional evaluators are not available; use deterministic assertions instead"
             )
         return self
+    """

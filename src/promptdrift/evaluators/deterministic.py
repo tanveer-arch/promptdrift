@@ -61,6 +61,30 @@ def evaluate_assertion(assertion: Assertion, response: ModelResponse) -> Evaluat
             if str(value) not in text
             else "Forbidden text appears in the output.",
         )
+    if kind == "starts_with":
+        prefix = str(value)
+        passed = text.startswith(prefix)
+        return _result(
+            assertion,
+            passed,
+            prefix,
+            text,
+            "Output starts with the required prefix."
+            if passed
+            else "Output does not start with the required prefix.",
+        )
+    if kind == "ends_with":
+        suffix = str(value)
+        passed = text.endswith(suffix)
+        return _result(
+            assertion,
+            passed,
+            suffix,
+            text,
+            "Output ends with the required suffix."
+            if passed
+            else "Output does not end with the required suffix.",
+        )
     if kind in {"regex", "not_regex"}:
         try:
             matched = re.search(str(value), text) is not None
