@@ -14,7 +14,7 @@ from promptdrift.engine.baseline import load_baseline
 from promptdrift.engine.provenance import fingerprint, with_response
 from promptdrift.engine.runner import evaluate_response, evaluation_status
 from promptdrift.engine.suite import resolve_suite
-from promptdrift.errors import ConfigError, ProviderError
+from promptdrift.errors import ConfigError, ProviderBudgetExceededError, ProviderError
 from promptdrift.models import BaselineTest, Config, TestCase
 from promptdrift.models.monitor import Diagnosis, MonitorCase, MonitorReport
 from promptdrift.models.provenance import Provenance
@@ -124,6 +124,14 @@ def monitor_suite(config: Config, config_path: Path, *, samples: int = 3) -> Mon
     for test in active.tests:
         prompt = render_prompt(active.resolve_path(config_path, test.prompt), test.variables)
         prepared.append((test, prompt, fingerprint(active, test, prompt)))
+
+    request_budget = active.provider.resilience.request_budget
+    planned_requests = len(prepared) * samples
+    if request_budget is not None and planned_requests > request_budget:
+        raise ProviderBudgetExceededError(
+            f"Planned requests ({planned_requests}) exceed request budget ({request_budget})"
+        )
+
     provider = create_provider(active.provider)
     results = []
     for test, prompt, provenance in prepared:
