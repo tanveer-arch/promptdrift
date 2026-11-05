@@ -7,6 +7,7 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
+from promptdrift.errors import PromptDriftError
 from promptdrift.models import RegressionReport
 from promptdrift.models.capture import Interaction
 
@@ -70,23 +71,39 @@ def record_report(
     path: Path | None = None,
     *,
     store_raw_output: bool = False,
+    retention_limit: int = 1000,
 ) -> None:
-    """Persist local history without raw prompts/outputs unless explicitly requested."""
+    """Persist local history with configurable retention.
+
+    Raw prompts and outputs are suppressed by default.
+    Older records are pruned atomically after inserting a new run.
+    """
+
+    if retention_limit < 1:
+        raise ValueError("retention_limit must be at least 1")
+
     try:
         stored = report.model_copy(deep=True)
+
         if not store_raw_output:
             for test in stored.tests:
                 test.input = "[suppressed]"
                 test.output = "[suppressed]"
+
                 for evaluation in test.evaluations:
                     evaluation.expected = None
                     evaluation.actual = None
                     evaluation.reason = (
                         "Passed." if evaluation.passed else "Contract not satisfied."
                     )
+
+        # Insertion and retention pruning share one transaction.
         with _get_db(path) as db:
             db.execute(
-                "INSERT INTO runs VALUES (?, ?, ?, ?)",
+                """
+                INSERT INTO runs
+                VALUES (?, ?, ?, ?)
+                """,
                 (
                     report.generated_at.isoformat(),
                     report.provider,
@@ -94,8 +111,47 @@ def record_report(
                     stored.model_dump_json(),
                 ),
             )
-    except (sqlite3.Error, OSError):
-        pass
+
+            # Retain only the latest N inserted records.
+            db.execute(
+                """
+                DELETE FROM runs
+                WHERE rowid NOT IN (
+                    SELECT rowid
+                    FROM runs
+                    ORDER BY rowid DESC
+                    LIMIT ?
+                )
+                """,
+                (retention_limit,),
+            )
+
+    except sqlite3.OperationalError as exc:
+        message = str(exc).lower()
+
+        if "locked" in message or "busy" in message:
+            raise PromptDriftError(
+                "SQLite history database is locked. Close other PromptDrift processes and retry."
+            ) from exc
+
+        # Preserve existing behavior for unrelated storage failures.
+        return
+
+    except sqlite3.DatabaseError as exc:
+        message = str(exc).lower()
+
+        if "malformed" in message or "corrupt" in message or "not a database" in message:
+            raise PromptDriftError(
+                "SQLite history database appears corrupted. "
+                "Back up the database, then rename or remove it "
+                "before rerunning PromptDrift."
+            ) from exc
+
+        return
+
+    except OSError:
+        # Preserve backward compatibility with existing tests.
+        return
 
 
 def record_interaction(interaction: Interaction, path: Path | None = None) -> None:
