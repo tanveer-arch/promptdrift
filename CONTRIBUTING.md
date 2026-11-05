@@ -202,6 +202,7 @@ All models in `src/promptdrift/models/` must use strict configuration:
 ```python
 from pydantic import BaseModel, ConfigDict
 
+
 class ExampleModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     ...
