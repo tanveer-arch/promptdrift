@@ -35,6 +35,20 @@ class GitContext:
         except (subprocess.CalledProcessError, FileNotFoundError):
             return False
 
+    def get_repo_root(self) -> Path | None:
+        """Find the worktree root from this context, independently of the shell cwd."""
+        try:
+            res = subprocess.run(
+                ["git", "rev-parse", "--show-toplevel"],
+                cwd=self.root,
+                capture_output=True,
+                encoding="utf-8",
+                check=True,
+            )
+            return Path(res.stdout.strip()).resolve()
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return None
+
     def get_current_branch(self) -> str | None:
         try:
             res = subprocess.run(
@@ -62,7 +76,7 @@ class GitContext:
             return None
 
     def get_changed_files(self, base_ref: str | None = None) -> list[str]:
-        """Return list of changed files relative to base_ref (or unstaged/staged if none)."""
+        """Return worktree-root-relative paths changed since base_ref, or staged/unstaged."""
         if not self.is_git_repo():
             return []
 
@@ -71,48 +85,42 @@ class GitContext:
             if base_ref:
                 # Compare against base_ref
                 res = subprocess.run(
-                    ["git", "diff", "--name-only", f"{base_ref}...HEAD"],
+                    ["git", "diff", "--no-relative", "--name-only", "-z", f"{base_ref}...HEAD"],
                     cwd=self.root,
                     capture_output=True,
-                    text=True,
+                    encoding="utf-8",
                 )
                 if res.returncode == 0:
-                    changed.update(line.strip() for line in res.stdout.splitlines() if line.strip())
+                    changed.update(path for path in res.stdout.split("\0") if path)
                 else:
                     # Fallback to direct diff
                     res = subprocess.run(
-                        ["git", "diff", "--name-only", base_ref],
+                        ["git", "diff", "--no-relative", "--name-only", "-z", base_ref],
                         cwd=self.root,
                         capture_output=True,
-                        text=True,
+                        encoding="utf-8",
                     )
                     if res.returncode == 0:
-                        changed.update(
-                            line.strip() for line in res.stdout.splitlines() if line.strip()
-                        )
+                        changed.update(path for path in res.stdout.split("\0") if path)
             else:
                 # Check staged and unstaged changes against HEAD
                 res_unstaged = subprocess.run(
-                    ["git", "diff", "--name-only"],
+                    ["git", "diff", "--no-relative", "--name-only", "-z"],
                     cwd=self.root,
                     capture_output=True,
-                    text=True,
+                    encoding="utf-8",
                 )
                 if res_unstaged.returncode == 0:
-                    changed.update(
-                        line.strip() for line in res_unstaged.stdout.splitlines() if line.strip()
-                    )
+                    changed.update(path for path in res_unstaged.stdout.split("\0") if path)
 
                 res_staged = subprocess.run(
-                    ["git", "diff", "--name-only", "--cached"],
+                    ["git", "diff", "--no-relative", "--name-only", "-z", "--cached"],
                     cwd=self.root,
                     capture_output=True,
-                    text=True,
+                    encoding="utf-8",
                 )
                 if res_staged.returncode == 0:
-                    changed.update(
-                        line.strip() for line in res_staged.stdout.splitlines() if line.strip()
-                    )
+                    changed.update(path for path in res_staged.stdout.split("\0") if path)
         except (subprocess.CalledProcessError, FileNotFoundError):
             pass
 

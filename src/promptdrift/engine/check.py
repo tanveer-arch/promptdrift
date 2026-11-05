@@ -39,15 +39,16 @@ def orchestrate_check(
     # Selective scenario execution if git changed files are available
     selected_tests = tests
     skipped_ids: set[str] = set()
-    normalized_changes = {str(Path(item)).replace("\\", "/") for item in changed_files}
-    prompt_names = {str(Path(test.prompt)).replace("\\", "/") for test in tests}
-    # Unknown paths (code, config, scenario definitions or nested Git paths) may affect
-    # every case. Only use the optimization when all changes map exactly to prompts.
-    if selective and normalized_changes and normalized_changes <= prompt_names:
+    repo_root = git.get_repo_root()
+    changed_paths = {(repo_root / item).resolve() for item in changed_files} if repo_root else set()
+    prompt_paths_by_id = {
+        test.id: config.resolve_path(config_path, test.prompt).resolve() for test in tests
+    }
+    # Git paths are worktree-relative; prompts are config-relative, as in the runner.
+    # Only select cases when every change maps to a known prompt. Otherwise run all.
+    if selective and changed_paths and changed_paths <= set(prompt_paths_by_id.values()):
         affected: list[TestCase] = [
-            test
-            for test in tests
-            if str(Path(test.prompt)).replace("\\", "/") in normalized_changes
+            test for test in tests if prompt_paths_by_id[test.id] in changed_paths
         ]
         skipped_ids = {t.id for t in tests} - {t.id for t in affected}
         selected_tests = affected
