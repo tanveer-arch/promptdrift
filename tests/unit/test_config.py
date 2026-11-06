@@ -70,7 +70,7 @@ class TestConfigValidation:
     def test_rejects_invalid_provider_type(self, tmp_path):
         path = tmp_path / "promptdrift.yaml"
         path.write_text(
-            "version: 1\nprovider: {type: anthropic}\ntests:\n  - id: a\n    prompt: a.txt\n"
+            "version: 1\nprovider: {type: notaprovider}\ntests:\n  - id: a\n    prompt: a.txt\n"
         )
         with pytest.raises(ConfigError):
             load_config(path)

@@ -63,6 +63,60 @@ provider:
 | `OpenAI request failed: HTTPStatusError` | Invalid key or quota | Check key at platform.openai.com |
 | `OpenAI request failed: ConnectError` | Network issue or wrong `base_url` | Check your network and endpoint |
 
+## Anthropic
+
+Calls the [Anthropic Messages API](https://docs.anthropic.com/en/api/messages) (`/v1/messages`) using `httpx` — no Anthropic SDK dependency required.
+
+### Configuration
+
+```yaml
+provider:
+  type: anthropic
+  model: claude-3-5-sonnet-latest
+  api_key_env: ANTHROPIC_API_KEY  # defaults to ANTHROPIC_API_KEY if omitted
+  system: You are a concise support assistant.  # optional system prompt
+  base_url: https://api.anthropic.com/v1  # optional, for proxies
+```
+
+The `system` value is sent in the top level `system` field of the request. When it is omitted, no system prompt is sent. The rendered test prompt is always sent as a single user message.
+
+### Environment
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+### Supported response shape
+
+The adapter accepts non-streaming Messages API responses. Text is built by joining every `text` block in `content`; other block types, such as tool use, are ignored. Token usage is read from `usage.input_tokens` and `usage.output_tokens`, and the returned `model` is recorded as the resolved model. Cost is unknown.
+
+Responses with invalid JSON, or with no text content, are rejected with a safe `ProviderResponseError`. Streaming and tool use execution are not supported.
+
+Anthropic accepts a `temperature` between 0 and 1. Values above 1 are rejected by the API with a client error.
+
+### Error mapping
+
+| HTTP status or failure | PromptDrift error | Retried |
+| --- | --- | --- |
+| 401, 403 | `ProviderAuthError` | No |
+| 429, 529 (overloaded) | `ProviderRateLimitError` | Yes |
+| 500, 502, 503, 504 | `ProviderTransportError` | Yes |
+| Other 4xx | `ProviderResponseError` | No |
+| Timeout | `ProviderTimeoutError` | Yes |
+| Connection failure | `ProviderTransportError` | Yes |
+| Invalid JSON or empty content | `ProviderResponseError` | No |
+
+Retries follow the shared resilience settings (`max_retries`, `initial_backoff`, and so on). Error messages contain only the provider name and the status or exception type. They never include API keys or response bodies.
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `ANTHROPIC_API_KEY is not set` | Env var missing | `export ANTHROPIC_API_KEY="sk-ant-..."` |
+| `Anthropic request failed: HTTPStatusError (401)` | Invalid key | Check the key in the Anthropic console |
+| `Anthropic request failed: HTTPStatusError (529 Overloaded)` | API is overloaded | Retry later or set `max_retries` |
+| `Anthropic request failed: HTTPStatusError (400)` | Bad model name or temperature above 1 | Check `model` and `defaults.temperature` |
+
 ## Ollama
 
 Calls the [Ollama Generate API](https://github.com/ollama/ollama/blob/main/docs/api.md) for local model inference.
@@ -129,7 +183,7 @@ provider:
 
 ## Monitoring behavior and limits
 
-OpenAI-compatible and Ollama adapters normalize malformed response payloads into safe `ProviderError`s rather than treating missing text as a successful empty answer. The engine records optional provider-returned resolved model IDs/system fingerprints as hashes, without assuming they prove a model update. OpenAI-compatible cost is unknown unless future explicit pricing is implemented; configured cost limits therefore cannot silently pass.
+OpenAI-compatible, Anthropic and Ollama adapters normalize malformed response payloads into safe `ProviderError`s rather than treating missing text as a successful empty answer. The engine records optional provider-returned resolved model IDs/system fingerprints as hashes, without assuming they prove a model update. OpenAI-compatible and Anthropic cost is unknown unless future explicit pricing is implemented; configured cost limits therefore cannot silently pass.
 
 Timeouts are currently fixed at 60 seconds (OpenAI) and 90 seconds (Ollama). Calls are sequential with no automatic retries. Repeated monitoring probes are explicitly budgeted observations, not hidden retries. No hosted provider was exercised by the offline test suite.
 

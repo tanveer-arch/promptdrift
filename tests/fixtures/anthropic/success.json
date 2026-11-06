@@ -1,0 +1,18 @@
+{
+  "id": "msg_test_123",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-test-model",
+  "content": [
+    {
+      "type": "text",
+      "text": "Hello PRIVATE_ANTHROPIC_OUTPUT_SENTINEL"
+    }
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 5,
+    "output_tokens": 3
+  }
+}

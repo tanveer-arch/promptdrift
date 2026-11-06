@@ -1,0 +1,7 @@
+{
+  "type": "error",
+  "error": {
+    "type": "overloaded_error",
+    "message": "overloaded PRIVATE_ERROR_BODY_SENTINEL"
+  }
+}

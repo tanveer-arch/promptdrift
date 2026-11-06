@@ -10,9 +10,9 @@ version: 2
 
 # LLM provider configuration
 provider:
-  type: openai              # "openai" | "ollama" | "mock"
+  type: openai              # "openai" | "anthropic" | "ollama" | "mock"
   model: gpt-4.1-mini       # Model identifier
-  api_key_env: OPENAI_API_KEY  # Environment variable name (OpenAI only)
+  api_key_env: OPENAI_API_KEY  # Environment variable name (OpenAI and Anthropic)
   base_url: null             # Override API endpoint (optional)
 
 # Default parameters applied to every test
@@ -72,10 +72,11 @@ tests:
 
 | Field | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `type` | string | Yes | — | `"openai"`, `"ollama"`, or `"mock"` |
+| `type` | string | Yes | — | `"openai"`, `"anthropic"`, `"ollama"`, or `"mock"` |
 | `model` | string | No | `"mock"` | Model name or identifier |
 | `api_key_env` | string | No | `null` | Environment variable holding the API key |
 | `base_url` | string | No | `null` | Custom API endpoint URL |
+| `system` | string | No | `null` | Anthropic only. Optional system prompt sent in the `system` field |
 
 ### Defaults
 

@@ -1,0 +1,17 @@
+{
+  "id": "msg_test_456",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-test-model",
+  "content": [
+    {"type": "text", "text": "Hello, "},
+    {"type": "tool_use", "id": "toolu_1", "name": "ignored", "input": {}},
+    {"type": "text", "text": "world"}
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 7,
+    "output_tokens": 4
+  }
+}

@@ -658,8 +658,9 @@ def doctor(
             except (TemplateError, OSError):
                 renderable = False
             checks.append({"name": f"Prompt renders: {test_case.prompt}", "passed": renderable})
-        if loaded.provider.type == "openai":
-            env = loaded.provider.api_key_env or "OPENAI_API_KEY"
+        key_env_defaults = {"openai": "OPENAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
+        if loaded.provider.type in key_env_defaults:
+            env = loaded.provider.api_key_env or key_env_defaults[loaded.provider.type]
             checks.append({"name": f"{env} found", "passed": bool(os.environ.get(env))})
         baseline = loaded.resolve_path(config_path, loaded.baseline.path)
         try:

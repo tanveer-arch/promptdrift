@@ -126,6 +126,7 @@ jobs:
 ## Supported Providers
 
 - **OpenAI-Compatible:** Supports the text-response Chat Completions API. Set `base_url` for proxies, local inference, or compatible endpoints.
+- **Anthropic:** Supports the text-response Messages API. Reads the key from `ANTHROPIC_API_KEY`.
 - **Ollama:** Completely local inference. Runs against the Generate API.
 - **Mock:** A deterministic local provider for offline testing and CI onboarding. Echoes prompts back with zero cost or latency.
 
