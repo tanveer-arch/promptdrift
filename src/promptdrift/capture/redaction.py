@@ -13,11 +13,15 @@ from collections.abc import Callable
 EMAIL_PATTERN = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
 PHONE_PATTERN = r"\+?1?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}"
 API_TOKEN_PATTERN = r"(?:Bearer\s+|sk-|api[_-]?key[=:]\s*)[A-Za-z0-9_\-./]{8,}"
+CREDIT_CARD_PATTERN = r"(?<!\d)(?:\d[ -]?){12,18}\d(?!\d)"
+SSN_PATTERN = r"\b\d{3}-\d{2}-\d{4}\b"
 
 BUILTIN_PATTERNS = {
     "email": EMAIL_PATTERN,
     "phone": PHONE_PATTERN,
     "api_token": API_TOKEN_PATTERN,
+    "credit_card": CREDIT_CARD_PATTERN,
+    "ssn": SSN_PATTERN,
 }
 
 _REDACTED = "[REDACTED]"
@@ -33,7 +37,8 @@ def apply_redaction(
     Args:
         text: The text to redact.
         patterns: List of regex pattern strings. Each can be a built-in
-            name (``"email"``, ``"phone"``, ``"api_token"``) or a raw regex.
+            name (``"email"``, ``"phone"``, ``"api_token"``, ``"credit_card"``,
+            or ``"ssn"``) or a raw regex.
         callback: Optional custom redaction function applied after patterns.
 
     Returns:
