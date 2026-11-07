@@ -96,6 +96,8 @@ tests:
 | `thresholds` | dict | No | `{}` | `latency_ms` and `cost_usd` limits; unknown cost cannot satisfy a limit |
 | `output` | object | No | `{format: text}` | `format: json` adds a JSON-validity contract |
 | `evaluators` | list | No | `[]` | Nonempty lists are rejected; semantic/judge evaluators are not implemented |
+- `credit_card`: Standard 13–19 digit payment card numbers (Visa, MasterCard, Amex) formatted with optional space or hyphen delimiters.
+- `ssn`: Standard 9-digit US Social Security Numbers (`XXX-XX-XXXX`).
 
 ### Assertion
 
