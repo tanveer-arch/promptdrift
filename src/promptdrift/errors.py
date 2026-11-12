@@ -29,6 +29,10 @@ class ProviderTransportError(ProviderError):
     """Network connection, DNS, or transient server error 502/503/504 (retryable)."""
 
 
+# Alias for backward compatibility with ProviderConnectionError
+ProviderConnectionError = ProviderTransportError
+
+
 class ProviderTimeoutError(ProviderError):
     """Per-request timeout expired or cumulative timeout budget exceeded."""
 
