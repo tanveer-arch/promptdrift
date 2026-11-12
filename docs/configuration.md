@@ -108,6 +108,18 @@ tests:
 | `name` | string | No | type name | Human-readable label in reports |
 | `severity` | string | No | `"fail"` | `"fail"` or `"warn"` |
 
+### Capture redaction
+
+Capture redaction can be configured with `redact_patterns`. Built-in identifiers are:
+
+- `email`: email addresses.
+- `phone`: North American phone-number formats.
+- `api_token`: common bearer and API-token formats.
+- `credit_card`: 13–19 digit payment-card numbers, including numbers separated by spaces or hyphens.
+- `ssn`: US Social Security Number values in `XXX-XX-XXXX` format.
+
+For example, set `redact_patterns: ["credit_card", "ssn"]` to replace matches with `[REDACTED]`. These built-in patterns are regex-based and do not validate payment-card checksums.
+
 ## Path Resolution
 
 All paths in the configuration (`prompt`, `baseline.path`, `scenarios.file`) are resolved **relative to the config file**, not the working directory. Absolute paths are used as-is.
