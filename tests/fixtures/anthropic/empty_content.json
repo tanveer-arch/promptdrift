@@ -1,0 +1,13 @@
+{
+  "id": "msg_test_789",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-test-model",
+  "content": [],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 5,
+    "output_tokens": 0
+  }
+}

@@ -72,6 +72,7 @@ def envelope_hashes(envelope: RequestEnvelope | None) -> dict[str, str] | None:
 def fingerprint(config: Config, test: TestCase, prompt: str) -> Provenance:
     default_url = {
         "openai": "https://api.openai.com/v1",
+        "anthropic": "https://api.anthropic.com/v1",
         "ollama": "http://localhost:11434",
         "mock": "",
     }[config.provider.type]

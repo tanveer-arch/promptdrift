@@ -71,6 +71,14 @@ def classify_error(exc: Exception, provider_name: str) -> tuple[ProviderError, b
                 True,
                 retry_after,
             )
+        if status == 529:
+            return (
+                ProviderRateLimitError(
+                    f"{provider_name} request failed: HTTPStatusError (529 Overloaded)"
+                ),
+                True,
+                retry_after,
+            )
         if status in (401, 403):
             return (
                 ProviderAuthError(f"{provider_name} request failed: HTTPStatusError ({status})"),

@@ -1,0 +1,7 @@
+{
+  "type": "error",
+  "error": {
+    "type": "api_error",
+    "message": "internal error PRIVATE_ERROR_BODY_SENTINEL"
+  }
+}

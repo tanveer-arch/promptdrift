@@ -23,10 +23,11 @@ class ResilienceConfig(BaseModel):
 
 class ProviderConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    type: Literal["openai", "ollama", "mock"]
+    type: Literal["openai", "ollama", "mock", "anthropic"]
     model: str = "mock"
     api_key_env: str | None = None
     base_url: str | None = None
+    system: str | None = None
     timeout: float | None = None
     max_retries: int | None = None
     initial_backoff: float | None = None
