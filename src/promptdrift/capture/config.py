@@ -6,6 +6,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from pydantic import BaseModel, Field
+
 
 @dataclass
 class CaptureConfig:
@@ -31,3 +33,13 @@ class CaptureConfig:
             raise ValueError(f"max_interactions must be >= 1, got {self.max_interactions}")
         if self.retention_days is not None and self.retention_days < 1:
             raise ValueError(f"retention_days must be >= 1, got {self.retention_days}")
+
+
+class StorageConfig(BaseModel):
+    """Storage retention configuration for historical monitoring runs."""
+
+    retention_runs: int = Field(
+        default=100,
+        ge=1,
+        description="Maximum number of historical monitoring runs to retain.",
+    )
