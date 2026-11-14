@@ -368,6 +368,13 @@ def accept(
     accept_regressions: Annotated[
         bool, typer.Option("--accept-regressions", help="Accept REGRESSED scenarios.")
     ] = False,
+    allow_stale: Annotated[
+        bool,
+        typer.Option(
+            "--allow-stale",
+            help="Allow a reviewed snapshot whose configuration or provenance changed.",
+        ),
+    ] = False,
     run_id: Annotated[
         str | None,
         typer.Option(
@@ -383,7 +390,7 @@ def accept(
     """Accept current behavior as the new canonical baseline."""
     try:
         from promptdrift.config import load_config
-        from promptdrift.engine.accept import accept_from_history, selective_accept
+        from promptdrift.engine.accept import accept_from_snapshot, selective_accept
         from promptdrift.engine.baseline import load_baseline
         from promptdrift.engine.baseline_history import archive_baseline
         from promptdrift.engine.check import orchestrate_check
@@ -404,12 +411,13 @@ def accept(
                 raise BaselineError(
                     "--changed cannot be combined with --run-id. Use --scenario to select cases."
                 )
-            accept_from_history(
+            accept_from_snapshot(
                 loaded,
                 config_path,
                 run_id=run_id,
                 scenario_ids=scenario if scenario else None,
                 accept_regressions=accept_regressions,
+                allow_stale=allow_stale,
                 force=True,
             )
         elif not path.exists():
@@ -457,7 +465,7 @@ def accept(
             typer.echo(json.dumps(payload, indent=2))
         else:
             if run_id:
-                console.print(f"[green]Accepted new baseline from history run {run_id}:[/] {path}")
+                console.print(f"[green]Accepted new baseline from reviewed snapshot {run_id}:[/] {path}")
             else:
                 console.print(f"[green]Accepted new baseline:[/] {path}")
     except PromptDriftError as error:
@@ -721,7 +729,9 @@ def monitor(
 
     try:
         loaded, config_path = load_config(config)
-        report = monitor_suite(loaded, config_path, samples=samples)
+        report = monitor_suite(
+            loaded, config_path, samples=samples, persist_snapshot=not no_history
+        )
         if not no_history:
             try:
                 save_monitor_report(report, history_path(config_path))

@@ -19,6 +19,7 @@ from promptdrift.models import BaselineTest, Config, TestCase
 from promptdrift.models.monitor import Diagnosis, MonitorCase, MonitorReport
 from promptdrift.models.provenance import Provenance
 from promptdrift.providers import create_provider
+from promptdrift.storage.snapshots import save_snapshot, snapshot_from_report
 from promptdrift.templates import render_prompt
 
 OPERATIONAL_ASSERTIONS = {"latency_ms", "cost_usd", "max_tokens"}
@@ -128,7 +129,13 @@ def _diagnose(
     return "stable", "All probes passed and output hashes match the baseline.", evidence
 
 
-def monitor_suite(config: Config, config_path: Path, *, samples: int = 3) -> MonitorReport:
+def monitor_suite(
+    config: Config,
+    config_path: Path,
+    *,
+    samples: int = 3,
+    persist_snapshot: bool = True,
+) -> MonitorReport:
     if not 1 <= samples <= 20:
         raise ConfigError("samples must be between 1 and 20")
     # Preflight the entire suite before spending any provider calls.
@@ -258,10 +265,21 @@ def monitor_suite(config: Config, config_path: Path, *, samples: int = 3) -> Mon
                 summary="Accepted case is absent from the active suite; monitoring coverage was removed.",
             )
         )
-    return MonitorReport(
+    report = MonitorReport(
         provider=active.provider.type,
         model=active.provider.model,
         samples=samples,
         baseline_path=str(baseline_path),
         tests=results,
     )
+    if persist_snapshot:
+        save_snapshot(
+            snapshot_from_report(
+                report,
+                active,
+                [test.id for test in active.tests],
+                source="monitor",
+            ),
+            config_path,
+        )
+    return report

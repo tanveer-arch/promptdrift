@@ -12,12 +12,14 @@ from typer.testing import CliRunner
 
 from promptdrift.cli import app
 from promptdrift.engine.baseline import load_baseline
+from promptdrift.engine.suite import resolve_suite
 from promptdrift.errors import BaselineError, PromptDriftError
 from promptdrift.models import Config
 from promptdrift.models.baseline import Baseline
 from promptdrift.models.monitor import Diagnosis, MonitorCase, MonitorReport
 from promptdrift.models.provenance import Provenance
 from promptdrift.storage.history import history_path, load_monitor_run_by_id, save_monitor_report
+from promptdrift.storage.snapshots import save_snapshot, snapshot_from_report
 
 
 @pytest.fixture
@@ -121,6 +123,21 @@ def _create_sample_monitor_report(
     )
 
 
+def _save_reviewed_report(report: MonitorReport, config: Config, config_path: Path) -> None:
+    history_file = history_path(config_path)
+    save_monitor_report(report, history_file)
+    active, _ = resolve_suite(config, config_path)
+    save_snapshot(
+        snapshot_from_report(
+            report,
+            active,
+            [test.id for test in active.tests],
+            source="monitor",
+        ),
+        config_path,
+    )
+
+
 class TestLoadMonitorRunById:
     def test_load_existing_run(self, tmp_path):
         db_path = tmp_path / "history.sqlite3"
@@ -169,12 +186,11 @@ class TestLoadMonitorRunById:
 class TestAcceptFromHistory:
     def test_accept_run_id_creates_baseline_without_provider_calls(self, test_project, monkeypatch):
         config, config_file = test_project
-        hist_file = history_path(config_file)
         run_id = "reviewed-run-001"
         report = _create_sample_monitor_report(
             run_id=run_id, config=config, config_path=config_file
         )
-        save_monitor_report(report, hist_file)
+        _save_reviewed_report(report, config, config_file)
 
         # Mock MockProvider.complete to assert no provider calls happen
         def fail_if_called(*args, **kwargs):
@@ -201,11 +217,11 @@ class TestAcceptFromHistory:
 
     def test_accept_run_id_json_output(self, test_project):
         config, config_file = test_project
-        hist_file = history_path(config_file)
         run_id = "reviewed-run-json"
-        save_monitor_report(
+        _save_reviewed_report(
             _create_sample_monitor_report(run_id=run_id, config=config, config_path=config_file),
-            hist_file,
+            config,
+            config_file,
         )
 
         runner = CliRunner()
@@ -218,8 +234,7 @@ class TestAcceptFromHistory:
         assert data["promoted_run_id"] == run_id
 
     def test_accept_run_id_incompatible_cases_rejected(self, test_project):
-        _, config_file = test_project
-        hist_file = history_path(config_file)
+        config, config_file = test_project
         run_id = "incomplete-run"
 
         # Report missing 'farewell' test
@@ -250,7 +265,7 @@ class TestAcceptFromHistory:
                 )
             ],
         )
-        save_monitor_report(incomplete_report, hist_file)
+        _save_reviewed_report(incomplete_report, config, config_file)
 
         runner = CliRunner()
         result = runner.invoke(
@@ -261,7 +276,6 @@ class TestAcceptFromHistory:
 
     def test_accept_run_id_failing_case_requires_accept_regressions(self, test_project):
         config, config_file = test_project
-        hist_file = history_path(config_file)
         run_id = "failing-run"
 
         failing_report = _create_sample_monitor_report(
@@ -272,7 +286,7 @@ class TestAcceptFromHistory:
             config=config,
             config_path=config_file,
         )
-        save_monitor_report(failing_report, hist_file)
+        _save_reviewed_report(failing_report, config, config_file)
 
         runner = CliRunner()
         # Without --accept-regressions -> must be refused
@@ -302,12 +316,11 @@ class TestAcceptFromHistory:
 
     def test_accept_run_id_selective_scenario(self, test_project):
         config, config_file = test_project
-        hist_file = history_path(config_file)
         run_id = "selective-run"
         report = _create_sample_monitor_report(
             run_id=run_id, config=config, config_path=config_file
         )
-        save_monitor_report(report, hist_file)
+        _save_reviewed_report(report, config, config_file)
 
         # First, create an initial baseline with old hashes
         baseline_file = config_file.parent / "promptdrift.baseline.json"
@@ -360,11 +373,11 @@ class TestAcceptFromHistory:
 
     def test_accept_run_id_archives_existing_baseline(self, test_project):
         config, config_file = test_project
-        hist_file = history_path(config_file)
         run_id = "archive-run"
-        save_monitor_report(
+        _save_reviewed_report(
             _create_sample_monitor_report(run_id=run_id, config=config, config_path=config_file),
-            hist_file,
+            config,
+            config_file,
         )
 
         baseline_file = config_file.parent / "promptdrift.baseline.json"
@@ -385,7 +398,6 @@ class TestAcceptFromHistory:
 
     def test_accept_run_id_does_not_leak_raw_prompts_or_secrets(self, test_project):
         config, config_file = test_project
-        hist_file = history_path(config_file)
         run_id = "no-leak-run"
         report = _create_sample_monitor_report(
             run_id=run_id, config=config, config_path=config_file
@@ -393,7 +405,7 @@ class TestAcceptFromHistory:
         report.tests[0] = report.tests[0].model_copy(
             update={"summary": "secret summary", "evidence": ["secret evidence"]}
         )
-        save_monitor_report(report, hist_file)
+        _save_reviewed_report(report, config, config_file)
 
         runner = CliRunner()
         runner.invoke(app, ["accept", "-c", str(config_file), "--run-id", run_id, "--force"])
@@ -406,11 +418,11 @@ class TestAcceptFromHistory:
 
     def test_accept_run_id_rejects_changed_flag(self, test_project):
         config, config_file = test_project
-        hist_file = history_path(config_file)
         run_id = "test-changed-run"
-        save_monitor_report(
+        _save_reviewed_report(
             _create_sample_monitor_report(run_id=run_id, config=config, config_path=config_file),
-            hist_file,
+            config,
+            config_file,
         )
 
         runner = CliRunner()
@@ -422,11 +434,11 @@ class TestAcceptFromHistory:
 
     def test_accept_run_id_rejects_without_force_when_baseline_exists(self, test_project):
         config, config_file = test_project
-        hist_file = history_path(config_file)
         run_id = "test-force-run"
-        save_monitor_report(
+        _save_reviewed_report(
             _create_sample_monitor_report(run_id=run_id, config=config, config_path=config_file),
-            hist_file,
+            config,
+            config_file,
         )
 
         baseline_file = config_file.parent / "promptdrift.baseline.json"
@@ -441,11 +453,11 @@ class TestAcceptFromHistory:
 
     def test_accept_run_id_rejects_mismatched_provenance(self, test_project):
         config, config_file = test_project
-        hist_file = history_path(config_file)
         run_id = "mismatched-prov-run"
-        save_monitor_report(
+        _save_reviewed_report(
             _create_sample_monitor_report(run_id=run_id, config=config, config_path=config_file),
-            hist_file,
+            config,
+            config_file,
         )
 
         # Modify the prompt file after monitoring was recorded

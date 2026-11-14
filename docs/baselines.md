@@ -69,7 +69,22 @@ promptdrift accept --scenario reviewed-regression --accept-regressions --force
 
 Acceptance evaluates the full active suite even if Git optimization would otherwise select only modified prompts. The merge changes only allowed/selected cases and keeps per-case provenance for retained entries. It never modifies `NOT_EVALUATED` entries. `--changed` accepts changed-but-valid cases; intentional regressions require explicit authorization.
 
-**Limitation:** acceptance currently makes fresh calls instead of promoting a specific immutable monitor run. Review the resulting canonical diff before committing. There is no built-in named-baseline rollback command; restore a reviewed snapshot/Git version manually. `baseline --force` replaces the whole suite and removes obsolete cases; selective acceptance retains existing entries.
+There is no built-in named-baseline rollback command; restore a reviewed snapshot/Git version manually. `baseline --force` replaces the whole suite and removes obsolete cases; selective acceptance retains existing entries.
+
+## Promoting a reviewed observation
+
+`monitor` and `check` persist a versioned snapshot under
+`.promptdrift/snapshots/`. The snapshot records the run ID, configuration and
+provenance hashes, statuses, output hashes, boolean assertion results, metrics,
+provider metadata, and schema version. It never records raw prompts, responses,
+expected/actual assertion values, or evaluator explanations.
+
+Use `promptdrift accept --run-id RUN_ID --force` to promote that exact reviewed
+observation without provider calls. Missing, corrupt, incompatible, partial, or
+stale snapshots are rejected. Failed cases require `--accept-regressions`; a
+configuration/provenance mismatch requires the separate explicit
+`--allow-stale` override. Snapshot writes and canonical baseline replacement are
+atomic.
 
 ## Three kinds of history
 

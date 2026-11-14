@@ -9,6 +9,7 @@ from promptdrift.errors import BaselineError, PromptDriftError
 from promptdrift.impact import ImpactRadiusReport
 from promptdrift.models import Config
 from promptdrift.models.baseline import Baseline, BaselineTest
+from promptdrift.models.provenance import Provenance
 from promptdrift.models.result import RegressionReport
 
 
@@ -102,16 +103,17 @@ def selective_accept(
     )
 
 
-def accept_from_history(
+def accept_from_snapshot(
     config: Config,
     config_path: Path,
     run_id: str,
     *,
     scenario_ids: list[str] | None = None,
     accept_regressions: bool = False,
+    allow_stale: bool = False,
     force: bool = False,
 ) -> Baseline:
-    """Promote reviewed observations from monitoring history to canonical baseline without provider calls."""
+    """Promote a reviewed observation snapshot without provider calls."""
     from datetime import UTC, datetime
 
     from promptdrift import __version__
@@ -119,19 +121,29 @@ def accept_from_history(
     from promptdrift.engine.baseline_history import archive_baseline
     from promptdrift.engine.suite import resolve_suite
     from promptdrift.git import GitContext
-    from promptdrift.storage.history import history_path, load_monitor_run_by_id
-
-    hist_file = history_path(config_path)
-    report = load_monitor_run_by_id(hist_file, run_id)
+    from promptdrift.storage.snapshots import (
+        configuration_hash,
+        load_snapshot,
+        provenance_hash,
+    )
 
     baseline_path = config.resolve_path(config_path, config.baseline.path)
     if baseline_path.exists() and not force:
         raise BaselineError(f"Baseline already exists: {baseline_path}. Use --force to replace it.")
 
     active, _ = resolve_suite(config, config_path)
+    snapshot = load_snapshot(config_path, run_id)
+    if not snapshot.complete:
+        raise BaselineError(
+            f"Reviewed snapshot '{run_id}' is partial and cannot be promoted."
+        )
+    if not allow_stale and snapshot.configuration_hash != configuration_hash(active):
+        raise BaselineError(
+            f"Reviewed snapshot '{run_id}' has stale configuration. "
+            "Use --allow-stale only after reviewing the configuration changes."
+        )
     active_test_ids = {t.id for t in active.tests}
-    active_tests_by_id = {t.id: t for t in active.tests}
-    report_cases_by_id = {c.test_id: c for c in report.tests}
+    report_cases_by_id = {c.test_id: c for c in snapshot.tests}
 
     if scenario_ids:
         unknown_requested = set(scenario_ids) - active_test_ids
@@ -142,33 +154,37 @@ def accept_from_history(
         missing_in_run = set(scenario_ids) - set(report_cases_by_id.keys())
         if missing_in_run:
             raise BaselineError(
-                f"Requested scenario(s) not found in history run '{run_id}': {', '.join(sorted(missing_in_run))}"
+                f"Requested scenario(s) not found in snapshot '{run_id}': {', '.join(sorted(missing_in_run))}"
             )
         target_ids = scenario_ids
     else:
         missing_in_run = active_test_ids - set(report_cases_by_id.keys())
         if missing_in_run:
             raise BaselineError(
-                f"History run '{run_id}' is incompatible with the active suite: missing cases: {', '.join(sorted(missing_in_run))}"
+                f"Snapshot '{run_id}' is incompatible with the active suite: missing cases: {', '.join(sorted(missing_in_run))}"
             )
         target_ids = [t.id for t in active.tests]
 
     failing_cases: list[str] = []
     from promptdrift.engine.provenance import fingerprint
     from promptdrift.templates import render_prompt
+    current_provenance: dict[str, Provenance] = {
+        test.id: fingerprint(
+            active,
+            test,
+            render_prompt(active.resolve_path(config_path, test.prompt), test.variables),
+        )
+        for test in active.tests
+    }
 
     for test_id in target_ids:
-        test = active_tests_by_id[test_id]
         case = report_cases_by_id[test_id]
         if case.output_hash is None:
             raise BaselineError(
-                f"Case '{test_id}' in history run '{run_id}' has no observed output hash to promote."
+                f"Case '{test_id}' in snapshot '{run_id}' has no observed output hash to promote."
             )
-        if case.provenance is not None:
-            prompt_str = render_prompt(
-                active.resolve_path(config_path, test.prompt), test.variables
-            )
-            current_prov = fingerprint(active, test, prompt_str)
+        current_prov = current_provenance[test_id]
+        if case.provenance is not None and not allow_stale:
             if (
                 case.provenance.input_hash != current_prov.input_hash
                 or case.provenance.configuration_hash != current_prov.configuration_hash
@@ -176,11 +192,17 @@ def accept_from_history(
                 or case.provenance.provider_hash != current_prov.provider_hash
             ):
                 raise BaselineError(
-                    f"Case '{test_id}' in history run '{run_id}' has mismatched provenance with current test configuration. "
+                    f"Case '{test_id}' in snapshot '{run_id}' has mismatched provenance with current test configuration. "
                     "The prompt, configuration, contracts, or provider have changed since this run was recorded."
                 )
-        if case.status in ("FAIL", "ERROR") or case.failures > 0 or case.provider_errors > 0:
+        if case.status in ("FAIL", "ERROR"):
             failing_cases.append(test_id)
+
+    if not allow_stale and snapshot.provenance_hash != provenance_hash(current_provenance):
+        raise BaselineError(
+            f"Reviewed snapshot '{run_id}' has stale provenance. "
+            "Use --allow-stale only after reviewing the prompt, contract, and provider changes."
+        )
 
     if failing_cases and not accept_regressions:
         raise BaselineError(
@@ -217,7 +239,7 @@ def accept_from_history(
         schema_version=3,
         promptdrift_version=__version__,
         generated_at=datetime.now(UTC),
-        provider={"type": report.provider, "model": report.model},
+        provider={"type": snapshot.provider, "model": snapshot.model},
         prompt_revision=None,
         git_sha=git_sha,
         prompt_hash=None,
@@ -230,3 +252,6 @@ def accept_from_history(
     baseline_path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write(baseline_path, new_baseline.model_dump_json(indent=2) + "\n")
     return new_baseline
+
+
+accept_from_history = accept_from_snapshot
