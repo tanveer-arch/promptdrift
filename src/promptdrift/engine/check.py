@@ -14,6 +14,7 @@ from promptdrift.errors import ConfigError
 from promptdrift.git import GitContext
 from promptdrift.impact import ImpactRadiusReport, calculate_impact_radius
 from promptdrift.models import Config, RegressionReport, TestCase
+from promptdrift.storage.snapshots import save_snapshot, snapshot_from_report
 
 
 def orchestrate_check(
@@ -72,5 +73,15 @@ def orchestrate_check(
         skipped_ids=skipped_ids,
         current_git_sha=current_git_sha,
         current_prompt_hash=current_prompt_hash,
+    )
+    active_config, _ = resolve_suite(config, config_path, scenario_file)
+    save_snapshot(
+        snapshot_from_report(
+            report,
+            active_config,
+            [test.id for test in active_config.tests],
+            source="check",
+        ),
+        config_path,
     )
     return report, impact

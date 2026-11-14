@@ -11,7 +11,7 @@ Available in the unreleased 0.4 development checkout. Monitoring does not depend
 5. Inspect `promptdrift history --limit 20 --json` and the CI artifact if something changes.
 6. Investigate before accepting a new baseline. Never auto-accept an incident.
 
-`baseline` and `accept` currently make fresh calls; they **do not promote an immutable prior monitor run**. Model variance between review and acceptance is a known limitation. Archives preserve the prior canonical file, but rollback is a deliberate file/Git operation, not an automated recovery policy.
+`accept --run-id` promotes an immutable reviewed snapshot without provider calls. Model variance between review and acceptance is therefore avoided for that workflow. Archives preserve the prior canonical file, but rollback is a deliberate file/Git operation, not an automated recovery policy.
 
 ## CLI contract
 
@@ -73,9 +73,23 @@ Provider-reported fingerprint/model changes are supporting evidence, never a ver
 
 ## History and privacy
 
-`monitor` stores its privacy-minimized report in `<config-directory>/.promptdrift/history.sqlite3`, retaining the latest 1,000 runs. `history` reads newest first without provider calls or a config validation requirement. Separate config files in one directory share the store; each report includes its baseline path/provider/model. Use `--no-history` to disable writes.
+`monitor` stores its privacy-minimized report in `<config-directory>/.promptdrift/history.sqlite3`, retaining the latest 1,000 runs, and writes a reviewed snapshot to `<config-directory>/.promptdrift/snapshots/<run-id>.json`. `check` also writes a snapshot; selective checks are marked partial and cannot be promoted. `history` reads newest first without provider calls or a config validation requirement. Separate config files in one directory share the store; each report includes its baseline path/provider/model. Use `--no-history` to disable both history and snapshot writes.
 
-Storage failure adds a warning without masking the behavioral result. The CLI JSON contains run ID, timestamp, case IDs, statuses, counts, diagnosis summaries and evidence, **not raw prompts, outputs, assertion values or exception messages**. IDs/model names/paths may still be sensitive. The legacy `baseline.store_raw_output` option does not enable raw monitoring storage.
+Storage failure adds a warning without masking the behavioral result. The CLI JSON contains run ID, timestamp, case IDs, statuses, counts, diagnosis summaries and evidence, **not raw prompts, outputs, assertion values or exception messages**. Reviewed snapshots contain only hashes, statuses, boolean assertion results, metrics, and provenance hashes; raw prompts and responses are never written. IDs/model names/paths may still be sensitive. The legacy `baseline.store_raw_output` option does not enable raw monitoring storage.
+
+## Promoting a reviewed snapshot
+
+```bash
+promptdrift monitor --config promptdrift.yaml --samples 3
+promptdrift accept --config promptdrift.yaml --run-id <run-id> --force
+```
+
+Promotion rejects missing, corrupt, incompatible, partial, stale, or failed snapshots. Use
+`--accept-regressions` only when intentionally accepting failed cases, and
+`--allow-stale` only after reviewing configuration or provenance changes. The
+snapshot is validated before the existing baseline is archived; the canonical
+baseline update itself uses an atomic rename, so a failed promotion cannot leave
+a partial baseline.
 
 CI runners are ephemeral: the Action report artifact is the durable evidence unless you separately persist the local database. `promptdrift purge` only purges the legacy home-directory capture/run store; delete the project `history.sqlite3` and archived snapshots separately when desired. SQLite is local storage, not encrypted storage or secure erasure.
 

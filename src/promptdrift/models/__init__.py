@@ -2,6 +2,7 @@ from .baseline import Baseline, BaselineTest
 from .capture import Interaction, Scenario, ScenarioLibrary
 from .config import Config, ProviderConfig, ResilienceConfig
 from .result import EvaluationResult, ModelResponse, RegressionReport, TestRun
+from .snapshot import ObservationSnapshot, SnapshotCase
 from .test import Assertion, Evaluator, TestCase
 
 __all__ = [
@@ -20,4 +21,6 @@ __all__ = [
     "ScenarioLibrary",
     "TestCase",
     "TestRun",
+    "ObservationSnapshot",
+    "SnapshotCase",
 ]

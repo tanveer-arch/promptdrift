@@ -1,4 +1,12 @@
 from .scenarios import add_or_update_scenarios, load_scenarios, save_scenarios
+from .snapshots import (
+    configuration_hash,
+    load_snapshot,
+    provenance_hash,
+    save_snapshot,
+    snapshot_from_report,
+    snapshot_path,
+)
 from .sqlite import (
     count_interactions,
     get_interactions,
@@ -20,4 +28,10 @@ __all__ = [
     "record_interaction",
     "record_report",
     "save_scenarios",
+    "configuration_hash",
+    "load_snapshot",
+    "provenance_hash",
+    "save_snapshot",
+    "snapshot_from_report",
+    "snapshot_path",
 ]

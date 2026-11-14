@@ -11,6 +11,7 @@ build/
 .promptdrift/*.sqlite3*
 .promptdrift/baseline_history/
 .promptdrift/scenarios.json
+.promptdrift/snapshots/
 promptdrift-report.json
 __agent__/
 promptdrift-report.html
