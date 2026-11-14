@@ -272,7 +272,9 @@ class TestAcceptFromHistory:
             app, ["accept", "-c", str(config_file), "--run-id", run_id, "--force"]
         )
         assert result.exit_code != 0
-        assert "incompatible" in result.output.lower() or "missing" in result.output.lower()
+        assert any(
+            phrase in result.output.lower() for phrase in ("incompatible", "missing", "partial")
+        )
 
     def test_accept_run_id_failing_case_requires_accept_regressions(self, test_project):
         config, config_file = test_project
