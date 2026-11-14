@@ -13,6 +13,7 @@ from contextlib import closing
 from pathlib import Path
 
 from promptdrift.errors import PromptDriftError
+from promptdrift.models.config import DEFAULT_BUSY_TIMEOUT_MS
 from promptdrift.models.monitor import MonitorReport
 
 HISTORY_SCHEMA_VERSION = 1
@@ -177,6 +178,62 @@ def _history_read_error(exc: Exception) -> PromptDriftError:
 
 
 # ---------------------------------------------------------------------
+# SQLITE CONNECTION MANAGEMENT
+# ---------------------------------------------------------------------
+
+
+def _get_history_connection(
+    path: Path,
+    *,
+    read_only: bool = False,
+    busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS,
+) -> sqlite3.Connection:
+    """Create a configured SQLite connection for monitoring history.
+
+    Enables WAL mode on writable connections, configures SQLite busy timeout,
+    and preserves strict URI read-only access.
+    """
+    path = Path(path)
+    if busy_timeout_ms < 0:
+        raise ValueError("busy_timeout_ms must be non-negative")
+
+    timeout_sec = busy_timeout_ms / 1000.0
+
+    try:
+        if read_only:
+            db_uri = f"{path.resolve().as_uri()}?mode=ro"
+            conn = sqlite3.connect(db_uri, uri=True, timeout=timeout_sec)
+            conn.execute(f"PRAGMA busy_timeout = {busy_timeout_ms}")
+            return conn
+
+        is_memory = str(path) == ":memory:"
+        if not is_memory:
+            path.parent.mkdir(parents=True, exist_ok=True)
+
+        conn = sqlite3.connect(path, timeout=timeout_sec)
+        conn.execute(f"PRAGMA busy_timeout = {busy_timeout_ms}")
+
+        if not is_memory:
+            mode_row = conn.execute("PRAGMA journal_mode = WAL").fetchone()
+            journal_mode = mode_row[0].lower() if mode_row else ""
+            if journal_mode != "wal":
+                conn.close()
+                raise PromptDriftError(
+                    f"Failed to enable SQLite WAL mode for monitoring history at '{path}'; "
+                    f"current journal_mode is '{journal_mode}'."
+                )
+
+        return conn
+
+    except PromptDriftError:
+        raise
+    except (sqlite3.Error, OSError) as exc:
+        if read_only:
+            raise _history_read_error(exc) from exc
+        raise _history_write_error(exc) from exc
+
+
+# ---------------------------------------------------------------------
 # MONITOR REPORT STORAGE
 # ---------------------------------------------------------------------
 
@@ -186,6 +243,7 @@ def save_monitor_report(
     path: Path,
     *,
     retention: int = DEFAULT_RETENTION_RUNS,
+    busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS,
 ) -> None:
     """Save a monitoring report and prune older reports atomically."""
 
@@ -193,12 +251,13 @@ def save_monitor_report(
         raise ValueError("retention must be positive")
 
     try:
-        path.parent.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
-
-        with closing(sqlite3.connect(path, timeout=5)) as db:
+        with closing(
+            _get_history_connection(
+                path,
+                read_only=False,
+                busy_timeout_ms=busy_timeout_ms,
+            )
+        ) as db:
             with db:
                 _ensure_history_schema(db)
 
@@ -239,6 +298,7 @@ def load_monitor_history(
     path: Path,
     *,
     limit: int = 20,
+    busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS,
 ) -> list[dict]:
     """Load monitoring history using a strictly read-only connection."""
 
@@ -249,13 +309,11 @@ def load_monitor_history(
         return []
 
     try:
-        db_uri = path.resolve().as_uri() + "?mode=ro"
-
         with closing(
-            sqlite3.connect(
-                db_uri,
-                uri=True,
-                timeout=5,
+            _get_history_connection(
+                path,
+                read_only=True,
+                busy_timeout_ms=busy_timeout_ms,
             )
         ) as db:
             _validate_history_schema(db)
@@ -461,13 +519,22 @@ class SqliteStorage:
         ) from error
 
 
-def load_monitor_run_by_id(path: Path, run_id: str) -> MonitorReport:
+def load_monitor_run_by_id(
+    path: Path,
+    run_id: str,
+    *,
+    busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS,
+) -> MonitorReport:
     """Retrieve a specific monitoring report by its run_id."""
     if not path.exists():
         raise PromptDriftError(f"Monitoring history database not found: {path}")
     try:
         with closing(
-            sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True, timeout=5)
+            _get_history_connection(
+                path,
+                read_only=True,
+                busy_timeout_ms=busy_timeout_ms,
+            )
         ) as db:
             _validate_history_schema(db)
             row = db.execute(

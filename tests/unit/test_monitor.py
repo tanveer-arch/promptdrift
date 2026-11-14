@@ -417,7 +417,7 @@ def test_json_format_failures_count_as_behavioral(monitored, monkeypatch):
 def test_history_write_failure_warns_without_masking_verdict(monitored, monkeypatch):
     from promptdrift.errors import PromptDriftError
 
-    def unavailable(*args):
+    def unavailable(*args, **kwargs):
         raise PromptDriftError("Monitoring completed but local history could not be saved.")
 
     _, path = monitored
@@ -563,3 +563,55 @@ def test_history_save_corrupted_database_has_clear_recovery_message(monitored, m
 
     with pytest.raises(PromptDriftError, match="corrupted"):
         save_monitor_report(report, history_db)
+
+
+def test_cli_monitor_propagates_busy_timeout_to_storage(monitored, monkeypatch):
+    config, path = monitored
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["storage"] = {"busy_timeout_ms": 12345}
+    path.write_text(json.dumps(data), encoding="utf-8")
+    passed_timeout = None
+
+    def capture_save(report, history_file, **kwargs):
+        nonlocal passed_timeout
+        passed_timeout = kwargs.get("busy_timeout_ms")
+
+    monkeypatch.setattr("promptdrift.storage.history.save_monitor_report", capture_save)
+    result = CliRunner().invoke(app, ["monitor", "-c", str(path), "--json"])
+    assert result.exit_code == 0
+    assert passed_timeout == 12345
+
+
+def test_cli_history_propagates_busy_timeout_to_storage(monitored, monkeypatch):
+    config, path = monitored
+    path.write_text(
+        "version: 1\nprovider: {type: mock}\n"
+        "storage:\n  busy_timeout_ms: 9876\n"
+        "baseline:\n  path: promptdrift.baseline.json\n"
+        "tests:\n  - id: hello\n    prompt: prompts/support.txt\n",
+        encoding="utf-8",
+    )
+    passed_timeout = None
+
+    def capture_load(history_file, **kwargs):
+        nonlocal passed_timeout
+        passed_timeout = kwargs.get("busy_timeout_ms")
+        return []
+
+    monkeypatch.setattr("promptdrift.storage.history.load_monitor_history", capture_load)
+    result = CliRunner().invoke(app, ["history", "-c", str(path), "--json"])
+    assert result.exit_code == 0
+    assert passed_timeout == 9876
+
+
+def test_cli_history_reports_invalid_config(tmp_path):
+    path = tmp_path / "promptdrift.yaml"
+    path.write_text(
+        "version: 1\nprovider: {type: mock}\n"
+        "storage:\n  busy_timeout_ms: -100\n"
+        "tests:\n  - id: a\n    prompt: a.txt\n",
+        encoding="utf-8",
+    )
+    result = CliRunner().invoke(app, ["history", "-c", str(path), "--json"])
+    assert result.exit_code == 2
+    assert "greater than or equal to 0" in result.output

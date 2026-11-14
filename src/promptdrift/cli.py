@@ -736,7 +736,11 @@ def monitor(
         )
         if not no_history:
             try:
-                save_monitor_report(report, history_path(config_path))
+                save_monitor_report(
+                    report,
+                    history_path(config_path),
+                    busy_timeout_ms=loaded.storage.busy_timeout_ms,
+                )
             except PromptDriftError as error:
                 report.warnings.append(str(error))
     except (PromptDriftError, OSError, ValueError) as error:
@@ -773,10 +777,18 @@ def history(
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     """Read recent local monitoring reports without calling a provider."""
-    from .storage.history import history_path, load_monitor_history
+    from .storage.history import DEFAULT_BUSY_TIMEOUT_MS, history_path, load_monitor_history
 
     try:
-        runs = load_monitor_history(history_path(config.resolve()), limit=limit)
+        busy_timeout_ms = DEFAULT_BUSY_TIMEOUT_MS
+        if config.is_file():
+            loaded, _ = load_config(config)
+            busy_timeout_ms = loaded.storage.busy_timeout_ms
+        runs = load_monitor_history(
+            history_path(config.resolve()),
+            limit=limit,
+            busy_timeout_ms=busy_timeout_ms,
+        )
     except PromptDriftError as error:
         if json_output:
             typer.echo(
