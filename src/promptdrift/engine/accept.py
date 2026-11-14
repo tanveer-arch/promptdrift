@@ -134,9 +134,7 @@ def accept_from_snapshot(
     active, _ = resolve_suite(config, config_path)
     snapshot = load_snapshot(config_path, run_id)
     if not snapshot.complete:
-        raise BaselineError(
-            f"Reviewed snapshot '{run_id}' is partial and cannot be promoted."
-        )
+        raise BaselineError(f"Reviewed snapshot '{run_id}' is partial and cannot be promoted.")
     if not allow_stale and snapshot.configuration_hash != configuration_hash(active):
         raise BaselineError(
             f"Reviewed snapshot '{run_id}' has stale configuration. "
@@ -166,8 +164,10 @@ def accept_from_snapshot(
         target_ids = [t.id for t in active.tests]
 
     failing_cases: list[str] = []
+
     from promptdrift.engine.provenance import fingerprint
     from promptdrift.templates import render_prompt
+
     current_provenance: dict[str, Provenance] = {
         test.id: fingerprint(
             active,

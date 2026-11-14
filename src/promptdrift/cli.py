@@ -465,7 +465,9 @@ def accept(
             typer.echo(json.dumps(payload, indent=2))
         else:
             if run_id:
-                console.print(f"[green]Accepted new baseline from reviewed snapshot {run_id}:[/] {path}")
+                console.print(
+                    f"[green]Accepted new baseline from reviewed snapshot {run_id}:[/] {path}"
+                )
             else:
                 console.print(f"[green]Accepted new baseline:[/] {path}")
     except PromptDriftError as error:
