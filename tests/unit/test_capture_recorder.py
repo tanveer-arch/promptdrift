@@ -52,6 +52,7 @@ class TestCaptureRecorderBasic:
     def test_enabled_records_interaction(self, tmp_path):
         db = tmp_path / "test.db"
         recorder = CaptureRecorder(CaptureConfig(enabled=True, db_path=db))
+
         result = recorder.record(
             prompt="p.txt",
             input_text="hello",
@@ -64,6 +65,7 @@ class TestCaptureRecorderBasic:
             estimated_cost_usd=0.001,
             tags=["test"],
         )
+
         assert result is not None
         assert result.input == "hello"
         assert result.output == "world"
@@ -71,16 +73,21 @@ class TestCaptureRecorderBasic:
         assert result.provider == "openai"
         assert result.latency_ms == 42.5
 
-        # Verify stored in SQLite
         items = get_interactions(path=db)
         assert len(items) == 1
         assert items[0].id == result.id
 
     def test_default_tags_merged(self, tmp_path):
         db = tmp_path / "test.db"
+
         recorder = CaptureRecorder(
-            CaptureConfig(enabled=True, db_path=db, default_tags=["prod", "v2"])
+            CaptureConfig(
+                enabled=True,
+                db_path=db,
+                default_tags=["prod", "v2"],
+            )
         )
+
         result = recorder.record(
             prompt="p.txt",
             input_text="hi",
@@ -89,6 +96,7 @@ class TestCaptureRecorderBasic:
             provider="mock",
             tags=["extra"],
         )
+
         assert result is not None
         assert "prod" in result.tags
         assert "v2" in result.tags
@@ -97,7 +105,7 @@ class TestCaptureRecorderBasic:
     def test_never_raises_on_bad_db_path(self):
         """Capture failures must never break the host application."""
         recorder = CaptureRecorder(CaptureConfig(enabled=True, db_path=None))
-        # Even with a weird config, record should not raise
+
         result = recorder.record(
             prompt="p.txt",
             input_text="test",
@@ -105,13 +113,13 @@ class TestCaptureRecorderBasic:
             model="m",
             provider="mock",
         )
-        # May or may not succeed depending on default path,
-        # but must NOT raise
+
         assert result is None or result is not None
 
     def test_system_prompt_recorded(self, tmp_path):
         db = tmp_path / "test.db"
         recorder = CaptureRecorder(CaptureConfig(enabled=True, db_path=db))
+
         result = recorder.record(
             prompt="p.txt",
             input_text="hi",
@@ -120,6 +128,7 @@ class TestCaptureRecorderBasic:
             provider="mock",
             system_prompt="You are a helpful assistant",
         )
+
         assert result is not None
         assert result.system_prompt == "You are a helpful assistant"
 
@@ -127,8 +136,15 @@ class TestCaptureRecorderBasic:
 class TestCaptureRecorderRollingCap:
     def test_max_interactions_rolling_eviction(self, tmp_path):
         db = tmp_path / "test.db"
-        recorder = CaptureRecorder(CaptureConfig(enabled=True, db_path=db, max_interactions=3))
-        # Record 5 interactions
+
+        recorder = CaptureRecorder(
+            CaptureConfig(
+                enabled=True,
+                db_path=db,
+                max_interactions=3,
+            )
+        )
+
         for i in range(5):
             recorder.record(
                 prompt="p.txt",
@@ -137,24 +153,48 @@ class TestCaptureRecorderRollingCap:
                 model="m",
                 provider="mock",
             )
-        # Should have at most 3
+
         assert count_interactions(path=db) <= 3
 
     def test_new_interactions_replace_oldest(self, tmp_path):
         db = tmp_path / "test.db"
-        recorder = CaptureRecorder(CaptureConfig(enabled=True, db_path=db, max_interactions=2))
-        recorder.record(prompt="p.txt", input_text="first", output="o1", model="m", provider="mock")
-        recorder.record(
-            prompt="p.txt", input_text="second", output="o2", model="m", provider="mock"
+
+        recorder = CaptureRecorder(
+            CaptureConfig(
+                enabled=True,
+                db_path=db,
+                max_interactions=2,
+            )
         )
+
+        recorder.record(
+            prompt="p.txt",
+            input_text="first",
+            output="o1",
+            model="m",
+            provider="mock",
+        )
+
+        recorder.record(
+            prompt="p.txt",
+            input_text="second",
+            output="o2",
+            model="m",
+            provider="mock",
+        )
+
         r3 = recorder.record(
-            prompt="p.txt", input_text="third", output="o3", model="m", provider="mock"
+            prompt="p.txt",
+            input_text="third",
+            output="o3",
+            model="m",
+            provider="mock",
         )
 
         items = get_interactions(path=db)
         ids = {item.id for item in items}
+
         assert len(items) <= 2
-        # The newest should still be present
         assert r3 is not None
         assert r3.id in ids
 
@@ -162,9 +202,15 @@ class TestCaptureRecorderRollingCap:
 class TestCaptureRecorderRedaction:
     def test_email_redaction(self, tmp_path):
         db = tmp_path / "test.db"
+
         recorder = CaptureRecorder(
-            CaptureConfig(enabled=True, db_path=db, redact_patterns=["email"])
+            CaptureConfig(
+                enabled=True,
+                db_path=db,
+                redact_patterns=["email"],
+            )
         )
+
         result = recorder.record(
             prompt="p.txt",
             input_text="Contact me at john@example.com",
@@ -172,6 +218,7 @@ class TestCaptureRecorderRedaction:
             model="m",
             provider="mock",
         )
+
         assert result is not None
         assert "john@example.com" not in result.input
         assert "john@example.com" not in result.output
@@ -179,9 +226,15 @@ class TestCaptureRecorderRedaction:
 
     def test_phone_redaction(self, tmp_path):
         db = tmp_path / "test.db"
+
         recorder = CaptureRecorder(
-            CaptureConfig(enabled=True, db_path=db, redact_patterns=["phone"])
+            CaptureConfig(
+                enabled=True,
+                db_path=db,
+                redact_patterns=["phone"],
+            )
         )
+
         result = recorder.record(
             prompt="p.txt",
             input_text="Call me at 555-123-4567",
@@ -189,6 +242,7 @@ class TestCaptureRecorderRedaction:
             model="m",
             provider="mock",
         )
+
         assert result is not None
         assert "555-123-4567" not in result.input
 
@@ -199,8 +253,13 @@ class TestCaptureRecorderRedaction:
             return text.replace("SECRET", "***")
 
         recorder = CaptureRecorder(
-            CaptureConfig(enabled=True, db_path=db, redact_callback=custom_redact)
+            CaptureConfig(
+                enabled=True,
+                db_path=db,
+                redact_callback=custom_redact,
+            )
         )
+
         result = recorder.record(
             prompt="p.txt",
             input_text="My SECRET password",
@@ -208,15 +267,22 @@ class TestCaptureRecorderRedaction:
             model="m",
             provider="mock",
         )
+
         assert result is not None
         assert "SECRET" not in result.input
         assert "***" in result.input
 
     def test_system_prompt_also_redacted(self, tmp_path):
         db = tmp_path / "test.db"
+
         recorder = CaptureRecorder(
-            CaptureConfig(enabled=True, db_path=db, redact_patterns=["email"])
+            CaptureConfig(
+                enabled=True,
+                db_path=db,
+                redact_patterns=["email"],
+            )
         )
+
         result = recorder.record(
             prompt="p.txt",
             input_text="hi",
@@ -225,6 +291,7 @@ class TestCaptureRecorderRedaction:
             provider="mock",
             system_prompt="Admin email: admin@corp.com",
         )
+
         assert result is not None
         assert "admin@corp.com" not in result.system_prompt
 
@@ -237,22 +304,31 @@ class TestSampling:
         assert should_sample("any_fingerprint", 0.0) is False
 
     def test_deterministic(self):
-        """Same fingerprint + same rate = same decision."""
         fp = "test_fingerprint_12345"
+
         decision1 = should_sample(fp, 0.5)
         decision2 = should_sample(fp, 0.5)
+
         assert decision1 == decision2
 
     def test_different_fingerprints_vary(self):
-        """With rate=0.5 and many fingerprints, we expect a mix of True/False."""
         results = [should_sample(f"fp_{i}", 0.5) for i in range(1000)]
+
         true_count = sum(results)
-        # With 1000 samples at 50%, we expect roughly 400-600 True
+
         assert 300 < true_count < 700
 
     def test_sampling_applied_by_recorder(self, tmp_path):
         db = tmp_path / "test.db"
-        recorder = CaptureRecorder(CaptureConfig(enabled=True, db_path=db, sample_rate=0.0))
+
+        recorder = CaptureRecorder(
+            CaptureConfig(
+                enabled=True,
+                db_path=db,
+                sample_rate=0.0,
+            )
+        )
+
         result = recorder.record(
             prompt="p.txt",
             input_text="hello",
@@ -260,42 +336,95 @@ class TestSampling:
             model="m",
             provider="mock",
         )
+
         assert result is None
         assert count_interactions(path=db) == 0
 
 
 class TestRedaction:
+    def test_redact_credit_card_patterns(self):
+        samples = [
+            "My card is 4532-7112-8901-1234, please charge it.",
+            "Use 3782 822468 30005 for the payment.",
+            "Card number 5105105105105105.",
+        ]
+
+        for sample in samples:
+            redacted = apply_redaction(
+                sample,
+                ["credit_card"],
+            )
+            assert "[REDACTED]" in redacted
+
+    def test_redact_ssn_patterns(self):
+        text = "User SSN is 000-12-3456."
+
+        redacted = apply_redaction(
+            text,
+            ["ssn"],
+        )
+
+        assert redacted == "User SSN is [REDACTED]."
+
+    def test_ssn_and_credit_card_false_positives(self):
+        text = "Order ID 123-456 and ZIP code 90210."
+
+        redacted = apply_redaction(
+            text,
+            ["ssn", "credit_card"],
+        )
+
+        assert redacted == text
+
     def test_email_pattern(self):
         text = "Email me at user@example.com please"
+
         result = apply_redaction(text, ["email"])
+
         assert "user@example.com" not in result
         assert "[REDACTED]" in result
 
     def test_phone_pattern(self):
         text = "Call 555-123-4567"
+
         result = apply_redaction(text, ["phone"])
+
         assert "555-123-4567" not in result
 
     def test_api_token_pattern(self):
         text = "Use Bearer sk-abc123defghijklmnop for auth"
+
         result = apply_redaction(text, ["api_token"])
+
         assert "sk-abc123defghijklmnop" not in result
 
     def test_custom_regex_pattern(self):
         text = "SSN: 123-45-6789"
-        result = apply_redaction(text, [r"\d{3}-\d{2}-\d{4}"])
+
+        result = apply_redaction(
+            text,
+            [r"\d{3}-\d{2}-\d{4}"],
+        )
+
         assert "123-45-6789" not in result
 
     def test_invalid_regex_skipped(self):
         text = "Hello world"
+
         result = apply_redaction(text, ["[invalid"])
+
         assert result == "Hello world"
 
     def test_callback_applied_after_patterns(self):
         def cb(text: str) -> str:
             return text.replace("foo", "bar")
 
-        result = apply_redaction("foo@example.com and foo", ["email"], cb)
+        result = apply_redaction(
+            "foo@example.com and foo",
+            ["email"],
+            cb,
+        )
+
         assert "foo@example.com" not in result
         assert "bar" in result
 
@@ -303,7 +432,12 @@ class TestRedaction:
         def bad_cb(text: str) -> str:
             raise RuntimeError("boom")
 
-        result = apply_redaction("hello", [], bad_cb)
+        result = apply_redaction(
+            "hello",
+            [],
+            bad_cb,
+        )
+
         assert result == "hello"
 
     def test_empty_text(self):
@@ -316,10 +450,11 @@ class TestRedaction:
 class TestSqliteHelpers:
     def test_count_interactions(self, tmp_path):
         from promptdrift.models.capture import Interaction
+        from promptdrift.storage.sqlite import record_interaction
 
         db = tmp_path / "test.db"
+
         assert count_interactions(path=db) == 0
-        from promptdrift.storage.sqlite import record_interaction
 
         record_interaction(
             Interaction(
@@ -332,6 +467,7 @@ class TestSqliteHelpers:
             ),
             path=db,
         )
+
         assert count_interactions(path=db) == 1
 
     def test_purge_oldest(self, tmp_path):
@@ -341,6 +477,7 @@ class TestSqliteHelpers:
         from promptdrift.storage.sqlite import record_interaction
 
         db = tmp_path / "test.db"
+
         for i in range(5):
             record_interaction(
                 Interaction(
@@ -354,8 +491,11 @@ class TestSqliteHelpers:
                 ),
                 path=db,
             )
+
         assert count_interactions(path=db) == 5
+
         purge_oldest_interactions(2, path=db)
+
         assert count_interactions(path=db) == 3
 
     def test_purge_old_by_days(self, tmp_path):
@@ -365,6 +505,7 @@ class TestSqliteHelpers:
         from promptdrift.storage.sqlite import record_interaction
 
         db = tmp_path / "test.db"
+
         old_time = datetime.now(UTC) - timedelta(days=60)
         new_time = datetime.now(UTC)
 
@@ -380,6 +521,7 @@ class TestSqliteHelpers:
             ),
             path=db,
         )
+
         record_interaction(
             Interaction(
                 id="new",
@@ -392,8 +534,12 @@ class TestSqliteHelpers:
             ),
             path=db,
         )
+
         assert count_interactions(path=db) == 2
+
         purge_old_interactions(30, path=db)
+
         remaining = get_interactions(path=db)
+
         assert len(remaining) == 1
         assert remaining[0].id == "new"
