@@ -68,6 +68,14 @@ class BaselineConfig(BaseModel):
     store_raw_output: bool = False
 
 
+DEFAULT_BUSY_TIMEOUT_MS = 5000
+
+
+class StorageConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    busy_timeout_ms: int = Field(default=DEFAULT_BUSY_TIMEOUT_MS, ge=0)
+
+
 class CIConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     fail_on: list[str] = ["assertion_failure"]
@@ -115,6 +123,7 @@ class Config(BaseModel):
     defaults: Defaults = Field(default_factory=Defaults)
     baseline: BaselineConfig = Field(default_factory=BaselineConfig)
     ci: CIConfig = Field(default_factory=CIConfig)
+    storage: StorageConfig = Field(default_factory=StorageConfig)
     sources: SourcesConfig | None = None
     scenarios: ScenariosConfig | None = None
     evaluation: EvaluationConfig | None = None

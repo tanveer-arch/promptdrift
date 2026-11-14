@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased] — 0.4.0
 
 ### Added
+- SQLite monitoring history now supports WAL mode and configurable
+  `storage.busy_timeout_ms` for improved concurrent access.
 - `monitor`: fresh full-suite repeated probes independent of Git changes, with evidence-based diagnoses and explicit provider-error handling.
 - Provider error taxonomy (`ProviderAuthError`, `ProviderRateLimitError`, `ProviderTimeoutError`, `ProviderConnectionError`, `ProviderResponseError`) normalizing provider exceptions into safe, non-secret diagnostic categories (#14).
 - Schema-v3 baselines with per-case request, generation, provider and contract fingerprints; v1/v2 loading remains supported without invented provenance.

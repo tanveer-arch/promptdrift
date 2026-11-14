@@ -140,3 +140,53 @@ class TestPathResolution:
         config, config_path = load_config(path)
         resolved = config.resolve_path(config_path, abs_path_str)
         assert resolved == Path(abs_path_str)
+
+
+class TestStorageConfig:
+    def test_storage_defaults_when_omitted(self, tmp_path):
+        path = tmp_path / "promptdrift.yaml"
+        path.write_text(
+            "version: 1\nprovider: {type: mock}\ntests:\n  - id: a\n    prompt: a.txt\n"
+        )
+        config, _ = load_config(path)
+        assert config.storage.busy_timeout_ms == 5000
+
+    def test_storage_accepts_custom_busy_timeout(self, tmp_path):
+        path = tmp_path / "promptdrift.yaml"
+        path.write_text(
+            "version: 1\nprovider: {type: mock}\n"
+            "storage:\n  busy_timeout_ms: 10000\n"
+            "tests:\n  - id: a\n    prompt: a.txt\n"
+        )
+        config, _ = load_config(path)
+        assert config.storage.busy_timeout_ms == 10000
+
+    def test_storage_accepts_zero_busy_timeout(self, tmp_path):
+        path = tmp_path / "promptdrift.yaml"
+        path.write_text(
+            "version: 1\nprovider: {type: mock}\n"
+            "storage:\n  busy_timeout_ms: 0\n"
+            "tests:\n  - id: a\n    prompt: a.txt\n"
+        )
+        config, _ = load_config(path)
+        assert config.storage.busy_timeout_ms == 0
+
+    def test_storage_rejects_negative_busy_timeout(self, tmp_path):
+        path = tmp_path / "promptdrift.yaml"
+        path.write_text(
+            "version: 1\nprovider: {type: mock}\n"
+            "storage:\n  busy_timeout_ms: -1\n"
+            "tests:\n  - id: a\n    prompt: a.txt\n"
+        )
+        with pytest.raises(ConfigError, match="greater than or equal to 0"):
+            load_config(path)
+
+    def test_storage_rejects_unknown_fields(self, tmp_path):
+        path = tmp_path / "promptdrift.yaml"
+        path.write_text(
+            "version: 1\nprovider: {type: mock}\n"
+            "storage:\n  busy_timeout_ms: 5000\n  extra_field: true\n"
+            "tests:\n  - id: a\n    prompt: a.txt\n"
+        )
+        with pytest.raises(ConfigError, match="extra_field"):
+            load_config(path)

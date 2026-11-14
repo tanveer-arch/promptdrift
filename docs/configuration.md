@@ -25,6 +25,10 @@ baseline:
   path: promptdrift.baseline.json  # Relative to config file
   store_raw_output: false          # If true, store raw output in local SQLite
 
+# Storage configuration (optional)
+storage:
+  busy_timeout_ms: 5000          # SQLite busy timeout in milliseconds (default: 5000)
+
 # Failures are controlled by assertion severity and explicit thresholds.
 # No semantic judge or embedding evaluator is enabled implicitly.
 
@@ -60,6 +64,7 @@ tests:
 | `provider` | object | Yes | — | LLM provider configuration |
 | `defaults` | object | No | See below | Default generation parameters |
 | `baseline` | object | No | See below | Baseline file settings |
+| `storage` | object | No | See below | Local SQLite storage settings for monitoring history |
 | `ci` | object | No | Legacy defaults | Compatibility-only; customization is rejected, not silently ignored |
 | `tests` | list | Usually | `[]` | Version 1 requires at least one; all run commands reject an empty resolved suite |
 | `scenarios` | object | No | default project library | Version 2: `{file: .promptdrift/scenarios.json}`; explicitly configured missing files are errors |
@@ -84,6 +89,29 @@ tests:
 | --- | --- | --- | --- |
 | `temperature` | float | `0` | Sampling temperature (0–2) |
 | `max_output_tokens` | int | `500` | Maximum output token count |
+
+### Storage
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `busy_timeout_ms` | int | `5000` | SQLite busy timeout in milliseconds (`>= 0`) |
+
+PromptDrift uses project-local SQLite storage for monitoring history (`.promptdrift/history.sqlite3`).
+SQLite Write-Ahead Logging (WAL) mode is enabled automatically on writable connections, allowing
+concurrent readers to query history without blocking concurrent monitoring runs from saving reports.
+
+The `storage.busy_timeout_ms` setting configures the maximum time in milliseconds SQLite will wait
+when encountering a locked or busy database before raising an actionable `PromptDriftError`.
+
+Example:
+
+```yaml
+storage:
+  busy_timeout_ms: 10000
+```
+
+Existing configuration files without a `storage` section remain fully backward-compatible and
+default to 5000 milliseconds.
 
 ### Test Case
 
