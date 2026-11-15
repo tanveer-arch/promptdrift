@@ -7,7 +7,9 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
-from promptdrift.errors import PromptDriftError
+from pydantic import ValidationError
+
+from promptdrift.errors import ConfigError, PromptDriftError
 from promptdrift.models import RegressionReport
 from promptdrift.models.capture import Interaction
 
@@ -188,8 +190,13 @@ def record_interaction(interaction: Interaction, path: Path | None = None) -> No
         pass
 
 
-def get_interactions(limit: int = 1000, path: Path | None = None) -> list[Interaction]:
-    """Retrieve captured interactions."""
+def get_interactions(
+    limit: int = 1000,
+    path: Path | None = None,
+    *,
+    strict: bool = False,
+) -> list[Interaction]:
+    """Retrieve captured interactions, optionally rejecting incomplete history."""
     try:
         with _get_db(path) as db:
             cursor = db.execute(
@@ -203,27 +210,107 @@ def get_interactions(limit: int = 1000, path: Path | None = None) -> list[Intera
             )
             interactions = []
             for row in cursor.fetchall():
-                interactions.append(
-                    Interaction(
+                observation_id = row[0] if isinstance(row[0], str) and row[0] else "<unknown>"
+                if strict:
+                    required_fields = {
+                        "id": row[0],
+                        "timestamp": row[1],
+                        "provider": row[2],
+                        "model": row[3],
+                        "prompt": row[4],
+                        "source": row[14],
+                    }
+                    missing_fields = [
+                        field
+                        for field, value in required_fields.items()
+                        if not isinstance(value, str) or not value.strip()
+                    ]
+                    if missing_fields:
+                        raise ConfigError(
+                            f"Historical observation '{observation_id}' is missing required "
+                            f"metadata: {', '.join(missing_fields)}. Repair or recapture this "
+                            "interaction before learning scenarios."
+                        )
+
+                try:
+                    variables = json.loads(row[7]) if row[7] else {}
+                except (ValueError, TypeError) as exc:
+                    if strict:
+                        raise ConfigError(
+                            f"Historical observation '{observation_id}' has invalid variables "
+                            "JSON. Repair or recapture this interaction before learning scenarios."
+                        ) from exc
+                    raise
+
+                try:
+                    tags = json.loads(row[13]) if row[13] else []
+                except (ValueError, TypeError) as exc:
+                    if strict:
+                        raise ConfigError(
+                            f"Historical observation '{observation_id}' has invalid tags JSON. "
+                            "Repair or recapture this interaction before learning scenarios."
+                        ) from exc
+                    raise
+
+                try:
+                    timestamp = datetime.fromisoformat(row[1]) if row[1] else datetime.now(UTC)
+                except (ValueError, TypeError) as exc:
+                    if strict:
+                        raise ConfigError(
+                            f"Historical observation '{observation_id}' has an invalid timestamp. "
+                            "Repair or recapture this interaction before learning scenarios."
+                        ) from exc
+                    raise
+
+                if strict and timestamp.utcoffset() is None:
+                    raise ConfigError(
+                        f"Historical observation '{observation_id}' has a timestamp without a "
+                        "timezone. Repair or recapture this interaction before learning scenarios."
+                    )
+
+                try:
+                    interaction = Interaction(
                         id=row[0],
-                        timestamp=datetime.fromisoformat(row[1]) if row[1] else datetime.now(UTC),
+                        timestamp=timestamp,
                         provider=row[2],
                         model=row[3],
                         prompt=row[4],
                         system_prompt=row[5],
                         input=row[6],
-                        variables=json.loads(row[7]) if row[7] else {},
+                        variables=variables,
                         output=row[8],
                         latency_ms=row[9] or 0.0,
                         input_tokens=row[10],
                         output_tokens=row[11],
                         estimated_cost_usd=row[12],
-                        tags=json.loads(row[13]) if row[13] else [],
+                        tags=tags,
                         source=row[14] or "capture",
                     )
-                )
+                except ValidationError as exc:
+                    if strict:
+                        invalid_fields = sorted(
+                            {
+                                ".".join(str(part) for part in error["loc"])
+                                for error in exc.errors(include_input=False)
+                            }
+                        )
+                        raise ConfigError(
+                            f"Historical observation '{observation_id}' is malformed or "
+                            f"unsupported (invalid fields: {', '.join(invalid_fields)}). Repair "
+                            "or recapture this interaction before learning scenarios."
+                        ) from exc
+                    raise
+
+                interactions.append(interaction)
             return interactions
-    except (sqlite3.Error, OSError):
+    except ConfigError:
+        raise
+    except (sqlite3.Error, OSError) as exc:
+        if strict:
+            raise ConfigError(
+                "Historical observations could not be read from local SQLite storage. "
+                "Check that the capture database is accessible and its schema is valid."
+            ) from exc
         return []
 
 

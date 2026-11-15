@@ -49,7 +49,7 @@ def add_or_update_scenarios(
     - New fingerprints create new candidate entries.
     - Scenarios without fingerprints fall back to ID matching (v0.2 compat).
     """
-    lib = load_scenarios(path)
+    lib = load_scenarios(path, strict=True)
     existing_by_id = {s.id: s for s in lib.scenarios}
     existing_by_fp: dict[str, Scenario] = {}
     for s in lib.scenarios:
@@ -78,6 +78,11 @@ def add_or_update_scenarios(
                     matched.first_seen = new.first_seen
             if new.fingerprint and not matched.fingerprint:
                 matched.fingerprint = new.fingerprint
+            provenance_by_id = {item.interaction_id: item for item in matched.provenance}
+            provenance_by_id.update({item.interaction_id: item for item in new.provenance})
+            matched.provenance = sorted(
+                provenance_by_id.values(), key=lambda item: (item.timestamp, item.interaction_id)
+            )
         else:
             # New scenario — add as candidate
             existing_by_id[new.id] = new

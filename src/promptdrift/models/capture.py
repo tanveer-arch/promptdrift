@@ -5,7 +5,13 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+)
 
 from promptdrift.models.test import Assertion, Threshold
 
@@ -31,6 +37,17 @@ class Interaction(BaseModel):
     source: Literal["capture", "manual", "import", "generated"] = "capture"
 
 
+class ObservationProvenance(BaseModel):
+    """Non-content metadata identifying the historical interaction behind a scenario."""
+
+    model_config = ConfigDict(extra="forbid")
+    interaction_id: str
+    timestamp: datetime
+    provider: str
+    model: str
+    source: Literal["capture", "manual", "import", "generated"]
+
+
 class Scenario(BaseModel):
     """Scenario candidate or promoted regression case."""
 
@@ -52,6 +69,14 @@ class Scenario(BaseModel):
     first_seen: datetime | None = None
     last_seen: datetime | None = None
     fingerprint: str | None = None
+    provenance: list[ObservationProvenance] = Field(default_factory=list)
+
+    @model_serializer(mode="wrap")
+    def omit_empty_provenance(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        data = handler(self)
+        if not self.provenance:
+            data.pop("provenance", None)
+        return data
 
 
 class ScenarioLibrary(BaseModel):

@@ -215,13 +215,19 @@ def learn(
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     """Turn captured interactions into candidate regression scenarios."""
-    interactions = get_interactions(limit=limit)
+    try:
+        interactions = get_interactions(limit=limit, strict=True)
+    except PromptDriftError as error:
+        _exit_error(error)
     if not interactions:
         console.print("[yellow]No captured interactions found. Use 'promptdrift capture' first.[/]")
         return
 
-    scenarios = discover_scenarios(interactions)
-    add_or_update_scenarios(scenarios)
+    try:
+        scenarios = discover_scenarios(interactions)
+        add_or_update_scenarios(scenarios)
+    except PromptDriftError as error:
+        _exit_error(error)
 
     if json_output:
         typer.echo(json.dumps([s.model_dump() for s in scenarios], indent=2, default=str))
@@ -269,7 +275,10 @@ def suggest(
         console.print(f"[red]Error:[/] Scenario '{scenario_id}' not found.")
         raise typer.Exit(code=2)
 
-    interactions = get_interactions()
+    try:
+        interactions = get_interactions(strict=True)
+    except PromptDriftError as error:
+        _exit_error(error)
     suggestions = suggest_assertions_for_scenario(scenario, interactions)
 
     if json_output:
@@ -291,18 +300,44 @@ def promote(
     ] = False,
 ) -> None:
     """Promote candidate scenarios into committed regression tests."""
-    lib = load_scenarios()
+    try:
+        lib = load_scenarios(strict=True)
+    except PromptDriftError as error:
+        _exit_error(error)
+
+    selected = [
+        scenario
+        for scenario in lib.scenarios
+        if scenario.status == "candidate" and (all_candidates or scenario.id == scenario_id)
+    ]
+
+    if not all_candidates:
+        existing = next(
+            (scenario for scenario in lib.scenarios if scenario.id == scenario_id), None
+        )
+        if existing is None:
+            console.print(f"[red]Error:[/] Scenario '{scenario_id}' not found.")
+            raise typer.Exit(code=2)
+        if existing.status == "ignored":
+            console.print(
+                f"[red]Error:[/] Scenario '{scenario_id}' is ignored and cannot be promoted."
+            )
+            raise typer.Exit(code=2)
+
     promoted_count = 0
-    interactions = get_interactions()
+    try:
+        interactions = get_interactions(strict=True)
+    except PromptDriftError as error:
+        _exit_error(error)
 
-    for sc in lib.scenarios:
-        if all_candidates or sc.id == scenario_id:
-            sc.status = "promoted"
-            if not sc.assertions:
-                sc.assertions = suggest_assertions_for_scenario(sc, interactions)
-            promoted_count += 1
+    for sc in selected:
+        sc.status = "promoted"
+        if not sc.assertions:
+            sc.assertions = suggest_assertions_for_scenario(sc, interactions)
+        promoted_count += 1
 
-    save_scenarios(lib)
+    if promoted_count:
+        save_scenarios(lib)
     console.print(f"[green]Promoted {promoted_count} scenario(s) to active regression suite.[/]")
     console.print(
         "[dim]Commit .promptdrift/scenarios.json to version-control your regression tests.[/]"

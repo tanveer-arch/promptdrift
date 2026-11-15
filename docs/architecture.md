@@ -59,6 +59,12 @@ Categorizes before/after behavioral deltas into `REGRESSED`, `IMPROVED`, `UNCHAN
 - **`scenarios.py`** — Versioned JSON scenario store (`.promptdrift/scenarios.json`).
 - **`history.py`** — Project-local monitoring history, 1,000 privacy-minimized reports; independent of accepted baselines.
 
+The capture workflow reads observations through the SQLite storage layer. `learn` rejects malformed or
+incomplete interaction metadata instead of treating unreadable history as empty, fingerprints
+prompt/input/variables deterministically, and records the originating interaction IDs, timestamps,
+providers, models, and sources on each candidate. Re-learning merges by fingerprint; `promote` only
+changes candidates, leaving already promoted scenarios untouched on repeat runs.
+
 ### `reports/` — Output Formatters
 - **`terminal.py`** & **`impact_report.py`** — Rich CLI tables and impact summaries.
 - **`github.py`** — Markdown formatted for GitHub Action Step Summaries and deduplicating PR comments.

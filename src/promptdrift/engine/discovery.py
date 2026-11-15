@@ -74,9 +74,10 @@ def discover_scenarios(interactions: Sequence[Interaction]) -> list[Scenario]:
 
     candidates: list[Scenario] = []
 
-    for fp, items in fingerprint_map.items():
+    for fp in sorted(fingerprint_map):
+        items = fingerprint_map[fp]
         # Use most recent as representative
-        items_sorted = sorted(items, key=lambda x: x.timestamp, reverse=True)
+        items_sorted = sorted(items, key=lambda x: (x.timestamp, x.id), reverse=True)
         representative = items_sorted[0]
         oldest = items_sorted[-1]
 
@@ -91,7 +92,7 @@ def discover_scenarios(interactions: Sequence[Interaction]) -> list[Scenario]:
                 variables=representative.variables,
                 category=cat,
                 tags=representative.tags,
-                source="capture",
+                source=representative.source,
                 status="candidate",
                 assertions=[],
                 thresholds={},
@@ -100,6 +101,16 @@ def discover_scenarios(interactions: Sequence[Interaction]) -> list[Scenario]:
                 first_seen=oldest.timestamp,
                 last_seen=representative.timestamp,
                 fingerprint=fp,
+                provenance=[
+                    {
+                        "interaction_id": interaction.id,
+                        "timestamp": interaction.timestamp,
+                        "provider": interaction.provider,
+                        "model": interaction.model,
+                        "source": interaction.source,
+                    }
+                    for interaction in sorted(items, key=lambda x: (x.timestamp, x.id))
+                ],
             )
         )
 
