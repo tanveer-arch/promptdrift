@@ -39,6 +39,19 @@ def apply_redaction(
     Returns:
         The redacted text.
     """
+    BUILTIN_PATTERNS: dict[str, re.Pattern[str]] = {
+        "email": re.compile(
+            r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+            re.IGNORECASE,
+        ),
+        "phone": re.compile(r"\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"),
+        "api_token": re.compile(
+            r"\b(?:sk-[a-zA-Z0-9]{16,}|ghp_[a-zA-Z0-9]{36}|[a-zA-Z0-9_-]{40,})\b"
+        ),
+        "credit_card": re.compile(r"\b(?:\d[ -]?){13,18}\d\b"),
+        "ssn": re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
+    }
+
     if not text:
         return text
 
