@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Source-linked ecosystem comparison and documented attribution/privacy limits.
 - Optional per-test `request_envelope` (system message, tool schemas, static retrieval context) with credential-stripped, per-component provenance hashes; monitoring evidence names the drifted component.
 - Anthropic provider (`type: anthropic`): Messages API adapter with optional `system` prompt, 429/529 mapped to rate limits, safe error messages, and offline fixtures.
+- `contains_all` and `contains_any` assertions that take a list of substrings (#61).
 
 ### Fixed
 - Isolated tests from the real home directory and working tree.

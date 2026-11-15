@@ -91,6 +91,69 @@ class TestNotContains:
         assert not evaluate_assertion(Assertion(type="not_contains", value=""), response()).passed
 
 
+# --- contains_all ---
+
+
+class TestContainsAll:
+    def test_passes_when_every_item_present(self):
+        result = evaluate_assertion(
+            Assertion(type="contains_all", value=["hello", "world"]), response()
+        )
+        assert result.passed
+
+    def test_fails_and_names_first_missing_item(self):
+        result = evaluate_assertion(
+            Assertion(type="contains_all", value=["hello", "refund", "policy"]), response()
+        )
+        assert not result.passed
+        assert "'refund'" in result.reason
+        assert "policy" not in result.reason
+
+    def test_empty_list_passes(self):
+        assert evaluate_assertion(Assertion(type="contains_all", value=[]), response()).passed
+
+    def test_is_case_sensitive(self):
+        assert not evaluate_assertion(
+            Assertion(type="contains_all", value=["hello", "WORLD"]), response()
+        ).passed
+
+    @pytest.mark.parametrize("value", ["hello", 42, ["hello", 42], {"a": "b"}])
+    def test_rejects_value_that_is_not_a_list_of_strings(self, value):
+        with pytest.raises(ValidationError, match="require a list of strings"):
+            Assertion(type="contains_all", value=value)
+
+    def test_requires_a_value(self):
+        with pytest.raises(ValidationError):
+            Assertion(type="contains_all")
+
+
+# --- contains_any ---
+
+
+class TestContainsAny:
+    def test_passes_when_one_item_present(self):
+        result = evaluate_assertion(
+            Assertion(type="contains_any", value=["goodbye", "world"]), response()
+        )
+        assert result.passed
+        assert "'world'" in result.reason
+
+    def test_fails_when_no_item_present(self):
+        result = evaluate_assertion(
+            Assertion(type="contains_any", value=["goodbye", "refund"]), response()
+        )
+        assert not result.passed
+        assert result.reason == "None of the accepted texts appear in the output."
+
+    def test_empty_list_fails(self):
+        assert not evaluate_assertion(Assertion(type="contains_any", value=[]), response()).passed
+
+    @pytest.mark.parametrize("value", ["hello", 42, ["hello", 42]])
+    def test_rejects_value_that_is_not_a_list_of_strings(self, value):
+        with pytest.raises(ValidationError, match="require a list of strings"):
+            Assertion(type="contains_any", value=value)
+
+
 # --- regex ---
 
 

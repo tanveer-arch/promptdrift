@@ -138,6 +138,7 @@ PromptDrift evaluates behavior using strict contracts, not subjective LLM judges
 | --- | --- |
 | `exact_match` | Character-for-character identical |
 | `contains`, `not_contains` | Substring inclusion or exclusion |
+| `contains_all`, `contains_any` | Every / at least one of a list of substrings |
 | `regex`, `not_regex` | Regular expression matching |
 | `json_valid`, `json_schema` | JSON parseability and structural validation |
 | `min_length`, `max_length` | Character count boundaries |

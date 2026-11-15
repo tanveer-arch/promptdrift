@@ -61,6 +61,28 @@ def evaluate_assertion(assertion: Assertion, response: ModelResponse) -> Evaluat
             if str(value) not in text
             else "Forbidden text appears in the output.",
         )
+    if kind == "contains_all":
+        missing = [item for item in value if item not in text]
+        return _result(
+            assertion,
+            not missing,
+            value,
+            text,
+            f"Required text does not appear in the output: {missing[0]!r}."
+            if missing
+            else "All required texts appear in the output.",
+        )
+    if kind == "contains_any":
+        found = next((item for item in value if item in text), None)
+        return _result(
+            assertion,
+            found is not None,
+            value,
+            text,
+            "None of the accepted texts appear in the output."
+            if found is None
+            else f"Accepted text appears in the output: {found!r}.",
+        )
     if kind in {"regex", "not_regex"}:
         try:
             matched = re.search(str(value), text) is not None

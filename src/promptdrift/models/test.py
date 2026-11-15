@@ -14,6 +14,8 @@ ASSERTION_TYPES = {
     "exact_match",
     "contains",
     "not_contains",
+    "contains_all",
+    "contains_any",
     "regex",
     "not_regex",
     "json_valid",
@@ -32,6 +34,8 @@ class Assertion(BaseModel):
         "exact_match",
         "contains",
         "not_contains",
+        "contains_all",
+        "contains_any",
         "regex",
         "not_regex",
         "json_valid",
@@ -60,6 +64,11 @@ class Assertion(BaseModel):
             _check_local_references(self.schema_)
         if self.type not in {"json_valid", "json_schema"} and self.value is None:
             raise ValueError(f"{self.type} assertions require a value")
+        if self.type in {"contains_all", "contains_any"} and (
+            not isinstance(self.value, list)
+            or not all(isinstance(item, str) for item in self.value)
+        ):
+            raise ValueError(f"{self.type} assertions require a list of strings")
         if self.type in {"regex", "not_regex"}:
             try:
                 re.compile(str(self.value))

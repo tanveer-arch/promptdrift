@@ -40,6 +40,30 @@ Passes if the forbidden string does **not** appear anywhere in the output.
 
 **Use case:** Preventing the model from making promises, mentioning competitors, or using banned terms.
 
+### `contains_all`
+
+Passes if **every** string in the list appears somewhere in the output. The failure reason names the first missing string.
+
+```yaml
+- type: contains_all
+  value: [refund, 30 days, policy]
+```
+
+**Use case:** Requiring several key terms without writing one `contains` assertion per term.
+
+### `contains_any`
+
+Passes if **at least one** string in the list appears somewhere in the output.
+
+```yaml
+- type: contains_any
+  value: [contact us, support team, representative]
+```
+
+**Use case:** Accepting any of several synonyms without resorting to a regex alternation.
+
+Both take a list of strings as `value` and match case-sensitively, like `contains`. An empty list passes for `contains_all` and fails for `contains_any`.
+
 ## Pattern Assertions
 
 ### `regex`
