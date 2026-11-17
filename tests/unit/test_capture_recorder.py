@@ -281,6 +281,36 @@ class TestRedaction:
         result = apply_redaction(text, ["api_token"])
         assert "sk-abc123defghijklmnop" not in result
 
+
+    def test_credit_card_redaction_formats(self):
+        samples = [
+            "4111111111111111",
+            "4111 1111 1111 1111",
+            "4111-1111-1111-1111",
+            "378282246310005",
+        ]
+        for card in samples:
+            result = apply_redaction(f"Card: {card}", ["credit_card"])
+            assert card not in result
+            assert "[REDACTED]" in result
+
+    def test_credit_card_redaction_does_not_match_out_of_range_lengths(self):
+        for number in ["123456789012", "12345678901234567890"]:
+            assert apply_redaction(number, ["credit_card"]) == number
+
+    def test_credit_card_redaction_preserves_adjacent_digits(self):
+        text = "x1234567890123456y"
+        assert apply_redaction(text, ["credit_card"]) == text
+
+    def test_ssn_redaction(self):
+        result = apply_redaction("SSN: 123-45-6789", ["ssn"])
+        assert "123-45-6789" not in result
+        assert "[REDACTED]" in result
+
+    def test_ssn_redaction_requires_standard_format(self):
+        for value in ["123456789", "12-345-6789", "123-456-789"]:
+            assert apply_redaction(value, ["ssn"]) == value
+
     def test_custom_regex_pattern(self):
         text = "SSN: 123-45-6789"
         result = apply_redaction(text, [r"\d{3}-\d{2}-\d{4}"])
