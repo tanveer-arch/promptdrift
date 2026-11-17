@@ -73,6 +73,7 @@ def fingerprint(config: Config, test: TestCase, prompt: str) -> Provenance:
     default_url = {
         "openai": "https://api.openai.com/v1",
         "anthropic": "https://api.anthropic.com/v1",
+        "gemini": "https://generativelanguage.googleapis.com",
         "ollama": "http://localhost:11434",
         "mock": "",
     }[config.provider.type]

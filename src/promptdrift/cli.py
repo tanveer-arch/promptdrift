@@ -725,7 +725,11 @@ def doctor(
             except (TemplateError, OSError):
                 renderable = False
             checks.append({"name": f"Prompt renders: {test_case.prompt}", "passed": renderable})
-        key_env_defaults = {"openai": "OPENAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
+        key_env_defaults = {
+            "openai": "OPENAI_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+            "gemini": "GEMINI_API_KEY",
+        }
         if loaded.provider.type in key_env_defaults:
             env = loaded.provider.api_key_env or key_env_defaults[loaded.provider.type]
             checks.append({"name": f"{env} found", "passed": bool(os.environ.get(env))})
