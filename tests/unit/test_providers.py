@@ -12,10 +12,32 @@ from promptdrift.errors import (
     ProviderTimeoutError,
 )
 from promptdrift.models.config import ProviderConfig
+from promptdrift.models.result import ToolCall
 from promptdrift.providers import create_provider
+from promptdrift.providers.base import normalize_tool_arguments
 from promptdrift.providers.mock import MockProvider
 from promptdrift.providers.ollama import OllamaProvider
 from promptdrift.providers.openai import OpenAIProvider
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected"),
+    [
+        (None, "null"),
+        (["item"], '["item"]'),
+        (42, "42"),
+        (True, "true"),
+        ('{"order_id":"A-1"}', {"order_id": "A-1"}),
+        ("[1,2]", "[1,2]"),
+        ("42", "42"),
+        ("true", "true"),
+        ('"text"', '"text"'),
+        ("null", "null"),
+        ("{malformed", "{malformed"),
+    ],
+)
+def test_normalize_tool_arguments_preserves_non_object_data(arguments, expected):
+    assert normalize_tool_arguments(arguments) == expected
 
 
 class TestOpenAIProvider:
@@ -42,6 +64,49 @@ class TestOpenAIProvider:
         assert response.output_tokens == 1
         assert response.provider == "openai"
         assert response.model == "test-model"
+
+    def test_extracts_multiple_tool_calls_and_parses_arguments(self, monkeypatch):
+        def fake_post(*args, **kwargs):
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "message": {
+                                "content": None,
+                                "tool_calls": [
+                                    {
+                                        "id": "call-1",
+                                        "type": "function",
+                                        "function": {
+                                            "name": "lookup_order",
+                                            "arguments": '{"order_id":"A-1"}',
+                                        },
+                                    },
+                                    {
+                                        "id": "call-2",
+                                        "type": "function",
+                                        "function": {"name": "search", "arguments": "{malformed"},
+                                    },
+                                ],
+                            }
+                        }
+                    ],
+                    "usage": {},
+                },
+                request=httpx.Request("POST", "https://example.test"),
+            )
+
+        monkeypatch.setenv("TEST_OPENAI_KEY", "test-key")
+        monkeypatch.setattr("promptdrift.providers.openai.httpx.post", fake_post)
+        response = OpenAIProvider(
+            ProviderConfig(type="openai", model="test-model", api_key_env="TEST_OPENAI_KEY")
+        ).complete("test", temperature=0, max_output_tokens=10)
+        assert response.output == ""
+        assert response.tool_calls[0] == ToolCall(
+            id="call-1", name="lookup_order", arguments={"order_id": "A-1"}
+        )
+        assert response.tool_calls[1].arguments == "{malformed"
 
     def test_missing_key_raises_safe_error(self, monkeypatch):
         monkeypatch.delenv("MISSING_KEY", raising=False)
@@ -292,6 +357,17 @@ class TestMockProvider:
         provider = MockProvider(ProviderConfig(type="mock", model="local-echo"))
         response = provider.complete("x " * 1000, temperature=0, max_output_tokens=1)
         assert len(response.output) <= 4  # max_output_tokens * 4 chars
+
+    def test_extracts_tool_calls_from_offline_fixture_payload(self):
+        provider = MockProvider(ProviderConfig(type="mock", model="local-echo"))
+        response = provider.complete(
+            '{"output":"done","tool_calls":[{"id":"call-1","name":"lookup_order","arguments":{"order_id":"A-1"}}]}',
+            temperature=0,
+            max_output_tokens=500,
+        )
+        assert response.output == "done"
+        assert response.tool_calls[0].name == "lookup_order"
+        assert response.tool_calls[0].arguments == {"order_id": "A-1"}
 
 
 class TestProviderFactory:

@@ -11,7 +11,7 @@ import httpx
 from promptdrift.errors import ProviderAuthError, ProviderResponseError
 from promptdrift.models.result import ModelResponse
 
-from .base import Provider
+from .base import Provider, normalize_tool_call
 from .resilience import ResilienceExecutor
 
 ANTHROPIC_VERSION = "2023-06-01"
@@ -74,8 +74,25 @@ class AnthropicProvider(Provider):
                 and block.get("type") == "text"
                 and isinstance(block.get("text"), str)
             ]
-            if not texts:
-                raise ProviderResponseError("Anthropic response had no text content")
+            tool_calls = [
+                call
+                for block in (blocks or [])
+                if isinstance(block, dict) and block.get("type") == "tool_use"
+                for call in [
+                    normalize_tool_call(
+                        {
+                            "id": block.get("id"),
+                            "name": block.get("name"),
+                            "arguments": block.get("input", {}),
+                        }
+                    )
+                ]
+                if call is not None
+            ]
+            if not texts and not tool_calls:
+                raise ProviderResponseError(
+                    "Anthropic response had no text content or tool content"
+                )
             usage = payload.get("usage") or {}
             return ModelResponse(
                 output="".join(texts),
@@ -87,6 +104,7 @@ class AnthropicProvider(Provider):
                 resolved_model=payload.get("model"),
                 system_fingerprint=None,
                 estimated_cost_usd=None,
+                tool_calls=tool_calls,
             )
 
         res = self.executor.execute(_attempt, start_time=start)

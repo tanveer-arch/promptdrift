@@ -11,6 +11,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from .provenance import Provenance
 
 
+class ToolCall(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str = ""
+    name: str = Field(min_length=1)
+    arguments: dict[str, Any] | str = Field(default_factory=dict)
+
+
 class ModelResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     output: str
@@ -22,6 +29,7 @@ class ModelResponse(BaseModel):
     resolved_model: str | None = None
     system_fingerprint: str | None = None
     estimated_cost_usd: float | None = Field(default=None, ge=0)
+    tool_calls: list[ToolCall] = Field(default_factory=list)
 
 
 class EvaluationResult(BaseModel):

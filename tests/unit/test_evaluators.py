@@ -4,11 +4,12 @@ import pytest
 from pydantic import ValidationError
 
 from promptdrift.evaluators import evaluate_assertion
-from promptdrift.models.result import ModelResponse
+from promptdrift.models.result import ModelResponse, ToolCall
 from promptdrift.models.test import Assertion
+from promptdrift.providers.base import normalize_tool_arguments
 
 
-def response(text="hello world", latency_ms=12, output_tokens=2, cost=0.001):
+def response(text="hello world", latency_ms=12, output_tokens=2, cost=0.001, tool_calls=None):
     return ModelResponse(
         output=text,
         latency_ms=latency_ms,
@@ -16,7 +17,130 @@ def response(text="hello world", latency_ms=12, output_tokens=2, cost=0.001):
         provider="mock",
         output_tokens=output_tokens,
         estimated_cost_usd=cost,
+        tool_calls=tool_calls or [],
     )
+
+
+class TestToolAssertions:
+    def test_tool_called_handles_multiple_calls(self):
+        result = evaluate_assertion(
+            Assertion(type="tool_called", name="lookup_order"),
+            response(
+                tool_calls=[
+                    ToolCall(id="1", name="search", arguments={}),
+                    ToolCall(id="2", name="lookup_order", arguments={"order_id": "A-1"}),
+                ]
+            ),
+        )
+        assert result.passed
+        assert result.actual == ["search", "lookup_order"]
+
+    def test_tool_called_fails_for_unexpected_or_missing_name(self):
+        result = evaluate_assertion(
+            Assertion(type="tool_called", name="lookup_order"),
+            response(tool_calls=[ToolCall(id="1", name="cancel_order", arguments={})]),
+        )
+        assert not result.passed
+
+    def test_tool_arguments_schema_supports_nested_objects_and_arrays(self):
+        result = evaluate_assertion(
+            Assertion(
+                type="tool_arguments_schema",
+                name="lookup_order",
+                schema={
+                    "type": "object",
+                    "required": ["order_id", "filters"],
+                    "properties": {
+                        "order_id": {"type": "string"},
+                        "filters": {
+                            "type": "object",
+                            "required": ["statuses"],
+                            "properties": {
+                                "statuses": {"type": "array", "items": {"type": "string"}}
+                            },
+                        },
+                    },
+                },
+            ),
+            response(
+                tool_calls=[
+                    ToolCall(
+                        id="1",
+                        name="lookup_order",
+                        arguments={"order_id": "A-1", "filters": {"statuses": ["open"]}},
+                    )
+                ]
+            ),
+        )
+        assert result.passed
+        assert result.actual == {"tool": "lookup_order", "call_count": 1}
+
+    @pytest.mark.parametrize(
+        "arguments",
+        [{}, {"order_id": 42}, '{"order_id":"PRIVATE_TOOL_ARGUMENT"', '{"order_id":'],
+    )
+    def test_tool_arguments_schema_fails_invalid_arguments_without_leaking_values(self, arguments):
+        result = evaluate_assertion(
+            Assertion(
+                type="tool_arguments_schema",
+                name="lookup_order",
+                schema={
+                    "type": "object",
+                    "required": ["order_id"],
+                    "properties": {"order_id": {"type": "string"}},
+                },
+            ),
+            response(
+                tool_calls=[
+                    ToolCall(
+                        id="1",
+                        name="lookup_order",
+                        arguments=arguments,
+                    )
+                ]
+            ),
+        )
+        assert not result.passed
+        assert "PRIVATE_TOOL_ARGUMENT" not in str(result.model_dump())
+
+    def test_tool_arguments_schema_fails_when_tool_missing(self):
+        result = evaluate_assertion(
+            Assertion(type="tool_arguments_schema", name="lookup_order", schema={"type": "object"}),
+            response(),
+        )
+        assert not result.passed
+
+    @pytest.mark.parametrize("arguments", [None, [], 42, True, "[1]", "42", "true", "null"])
+    def test_permissive_object_schema_rejects_non_object_arguments(self, arguments):
+        normalized = normalize_tool_arguments(arguments)
+        result = evaluate_assertion(
+            Assertion(type="tool_arguments_schema", name="lookup_order", schema={"type": "object"}),
+            response(
+                tool_calls=[
+                    ToolCall(id="1", name="lookup_order", arguments=normalized),
+                ]
+            ),
+        )
+        assert not result.passed
+        assert all(
+            value not in str(result.model_dump())
+            for value in ("PRIVATE_TOOL_ARGUMENT", "42", "true")
+        )
+
+    def test_no_tool_called_passes_and_fails_for_any_call(self):
+        assertion = Assertion(type="no_tool_called")
+        assert evaluate_assertion(assertion, response()).passed
+        result = evaluate_assertion(
+            assertion,
+            response(tool_calls=[ToolCall(id="1", name="lookup_order", arguments={})]),
+        )
+        assert not result.passed
+
+    def test_tool_assertions_validate_payload(self):
+        with pytest.raises(ValidationError, match="require a tool name"):
+            Assertion(type="tool_called")
+        with pytest.raises(ValidationError, match="require a schema"):
+            Assertion(type="tool_arguments_schema", name="lookup_order")
 
 
 # --- exact_match ---

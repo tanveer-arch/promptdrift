@@ -11,7 +11,7 @@ import httpx
 from promptdrift.errors import ProviderAuthError
 from promptdrift.models.result import ModelResponse
 
-from .base import Provider
+from .base import Provider, normalize_tool_call
 from .resilience import ResilienceExecutor
 
 
@@ -56,9 +56,29 @@ class OpenAIProvider(Provider):
             response.raise_for_status()
             payload = response.json()
             usage = payload.get("usage", {})
-            output = payload["choices"][0]["message"]["content"]
+            message = payload["choices"][0]["message"]
+            tool_calls = []
+            for item in message.get("tool_calls") or []:
+                if not isinstance(item, dict):
+                    continue
+                function = item.get("function")
+                if not isinstance(function, dict):
+                    continue
+                call = normalize_tool_call(
+                    {
+                        "id": item.get("id"),
+                        "name": function.get("name"),
+                        "arguments": function.get("arguments", {}),
+                    }
+                )
+                if call is not None:
+                    tool_calls.append(call)
+            raw_output = message.get("content")
+            if raw_output is None and not tool_calls:
+                raise ValueError("Expected text content or tool calls")
+            output = raw_output or ""
             if not isinstance(output, str):
-                raise ValueError("Expected a text completion")
+                raise ValueError("Expected text content or tool calls")
             return ModelResponse(
                 output=output,
                 input_tokens=usage.get("prompt_tokens"),
@@ -69,6 +89,7 @@ class OpenAIProvider(Provider):
                 resolved_model=payload.get("model"),
                 system_fingerprint=payload.get("system_fingerprint"),
                 estimated_cost_usd=None,
+                tool_calls=tool_calls,
             )
 
         res = self.executor.execute(_attempt, start_time=start)
