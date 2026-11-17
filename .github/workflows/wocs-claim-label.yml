@@ -1,0 +1,71 @@
+# Label WoCS claims
+#
+# Rule (maintainer's decision, 2026-11-17): the `wocs` label goes ONLY on
+# issues claimed under WoCS. When someone comments on an issue claiming it
+# AND mentions WoCS, this workflow adds the `wocs` label to that issue.
+# A contributor who claims an issue organically (no mention of WoCS) gets
+# NO `wocs` label — the workflow simply does nothing.
+#
+# What counts as a claim: the comment mentions "wocs" (any case) together
+# with claim language such as "assign", "work on", "take this", "I would
+# like", "claim" or "interested".
+#
+# Guards: bot comments are ignored; PR comments are ignored (issues only);
+# if the issue already has the `wocs` label nothing happens. This workflow
+# never assigns anyone and never posts a comment — labelling only.
+
+name: Label WoCS claims
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+
+jobs:
+  label-wocs-claim:
+    if: ${{ !github.event.issue.pull_request && github.event.comment.user.type != 'Bot' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const body = (context.payload.comment.body || '').toLowerCase();
+
+            const mentionsWocs = body.includes('wocs');
+            const claimPhrases = [
+              'assign',
+              'work on',
+              'take this',
+              'take up',
+              'i would like',
+              'i want to',
+              'claim',
+              'interested',
+              'please give',
+              'give me',
+            ];
+            const isClaim = claimPhrases.some(p => body.includes(p));
+
+            if (!mentionsWocs || !isClaim) {
+              core.info('Not a WoCS claim — no label added.');
+              return;
+            }
+
+            const labels = context.payload.issue.labels.map(l => l.name);
+            if (labels.includes('wocs')) {
+              core.info(`#${context.payload.issue.number} already has the wocs label.`);
+              return;
+            }
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              labels: ['wocs'],
+            });
+
+            core.info(
+              `Added wocs label to #${context.payload.issue.number} (WoCS claim by @${context.payload.comment.user.login}).`
+            );

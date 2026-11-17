@@ -1,0 +1,46 @@
+# PR issue-link reminder
+#
+# The other workflows depend on PRs linking their issue ("Fixes #63"):
+# label inheritance copies labels from the linked issue, and the
+# auto-unassign workflow counts a PR as linked only when it references the
+# issue number. This workflow nudges authors who open a PR without linking
+# any issue, so the rest of the automation keeps working.
+#
+# Guards: bot and maintainer PRs are ignored, drafts are ignored, and it
+# only fires once (on PR opened). If the author adds the link later, the
+# label-inheritance workflow picks it up on edit.
+
+name: PR issue-link reminder
+
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  remind-link:
+    if: ${{ github.event.pull_request.user.type != 'Bot' && github.event.pull_request.user.login != 'tanveer-arch' && !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const text = `${pr.title || ''}\n${pr.body || ''}`;
+
+            if (/#\d+/.test(text)) {
+              core.info('PR references an issue — no reminder.');
+              return;
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              body:
+                `Hi @${pr.user.login} — thanks for opening this PR! Please link the issue it fixes in the PR description ` +
+                `(e.g. \`Fixes #63\`) so the right labels get applied and the issue closes on merge.`,
+            });
+            core.info(`Reminded @${pr.user.login} to link an issue on #${pr.number}.`);

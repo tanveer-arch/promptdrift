@@ -1,0 +1,141 @@
+# Auto-merge on maintainer approval
+#
+# Rule: this workflow does exactly what the maintainer's deputy merge sweep
+# does, automatically, at the moment the last gate clears. A PR is squash
+# merged ONLY when ALL four conditions hold at the same time:
+#   (a) labels include lowercase `wocs` AND one `level 1/2/3` label;
+#   (b) every CI check-run on the current head is success (skipped and
+#       neutral are fine) — no failures, no pending, no missing test jobs;
+#   (c) the PR is mergeable (no conflicts);
+#   (d) an APPROVED review from tanveer-arch exists on the current head,
+#       with no unresolved changes-requested from anyone.
+#
+# HARD BLOCKLIST: PRs #36, #37, #38, #39 and #42 NEVER auto-merge, even if
+# they pass the four conditions. #39 is the reason this list exists: it
+# still carries a stale APPROVED review from tanveer-arch (2026-11-15) on
+# its current head, but it is a duplicate of #38 and must be reworked, not
+# merged. (It also currently has conflicts, but the blocklist protects it
+# even if those are resolved.)
+#
+# Triggers: a submitted review (covers approve-when-CI-already-green) and a
+# completed check run (covers approve-then-CI-finishes). The merge is a
+# point-in-time squash merge via the API — no lingering auto-merge request,
+# so a push after approval cannot merge unreviewed code.
+#
+# This workflow never closes anything and never merges the maintainer's own
+# PRs (the author cannot approve their own PR, so condition (d) cannot
+# pass for them).
+
+name: Auto-merge on maintainer approval
+
+on:
+  pull_request_review:
+    types: [submitted]
+  check_run:
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const BLOCKLIST = [36, 37, 38, 39, 42];
+            const MAINTAINER = 'tanveer-arch';
+
+            async function gate(prNumber) {
+              if (BLOCKLIST.includes(prNumber)) {
+                core.info(`#${prNumber} is blocklisted — never auto-merge.`);
+                return false;
+              }
+
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+              });
+              if (pr.draft) return false;
+              if (pr.mergeable !== true) return false; // false, or null (still computing)
+
+              // (a) labels: wocs + one level label.
+              const labels = pr.labels.map(l => l.name);
+              if (!labels.includes('wocs')) return false;
+              if (!labels.some(l => /^level [123]$/.test(l))) return false;
+
+              // (d) reviews: maintainer APPROVED on the current head, and
+              // nobody's latest state is CHANGES_REQUESTED.
+              const reviews = await github.paginate(
+                github.rest.pulls.listReviews,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: prNumber,
+                  per_page: 100,
+                }
+              );
+              const latestByUser = {};
+              for (const r of reviews) latestByUser[r.user.login] = r;
+              const mine = latestByUser[MAINTAINER];
+              if (!mine || mine.state !== 'APPROVED') return false;
+              if (mine.commit_id !== pr.head.sha) return false;
+              if (
+                Object.values(latestByUser).some(r => r.state === 'CHANGES_REQUESTED')
+              ) {
+                return false;
+              }
+
+              // (b) every check-run on the current head is success/skipped/neutral.
+              const checks = await github.paginate(
+                github.rest.checks.listForRef,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: pr.head.sha,
+                  per_page: 100,
+                }
+              );
+              if (checks.length === 0) return false;
+              const bad = checks.filter(
+                c =>
+                  c.status !== 'completed' ||
+                  !['success', 'skipped', 'neutral'].includes(c.conclusion)
+              );
+              if (bad.length > 0) return false;
+
+              return true;
+            }
+
+            // Which PRs to evaluate depends on the trigger.
+            let numbers = [];
+            if (context.eventName === 'pull_request_review') {
+              numbers = [context.payload.pull_request.number];
+            } else if (context.eventName === 'check_run') {
+              const sha = context.payload.check_run.head_sha;
+              const { data: prs } =
+                await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  commit_sha: sha,
+                });
+              numbers = prs.map(p => p.number);
+            }
+
+            for (const n of [...new Set(numbers)]) {
+              if (await gate(n)) {
+                await github.rest.pulls.merge({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: n,
+                  merge_method: 'squash',
+                });
+                core.info(`Squash-merged #${n} (all four gate conditions held).`);
+              } else {
+                core.info(`#${n}: gate not met — skipped.`);
+              }
+            }

@@ -1,0 +1,75 @@
+# PR label inheritance
+#
+# Rule: a PR that links an issue (e.g. "Fixes #63" in its description)
+# automatically inherits that issue's `wocs` label and its level label
+# (`level 1/2/3`). This removes the manual labelling step for every new PR.
+# The level is copied, never invented: if the linked issue has no level
+# label, only `wocs` is copied.
+#
+# Triggers on PR opened and edited, so it also fires when the author adds
+# the "Fixes #N" link after opening the PR.
+
+name: PR label inheritance
+
+on:
+  pull_request:
+    types: [opened, edited]
+
+permissions:
+  pull-requests: write
+  issues: read
+
+jobs:
+  inherit-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = `${pr.title || ''}\n${pr.body || ''}`;
+
+            // Find every "Fixes #N" / "Closes #N" / "Resolves #N" reference.
+            const linked = [...body.matchAll(/(?:fixe?s?|close?s?|resolve?s?)\s+#(\d+)/gi)].map(
+              m => parseInt(m[1], 10)
+            );
+            if (linked.length === 0) {
+              core.info('PR links no issue — nothing to inherit.');
+              return;
+            }
+
+            const toAdd = new Set();
+            for (const issueNumber of [...new Set(linked)]) {
+              const issue = await github.rest.issues.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+              });
+              for (const label of issue.data.labels) {
+                const name = typeof label === 'string' ? label : label.name;
+                if (name === 'wocs' || /^level [123]$/.test(name)) {
+                  toAdd.add(name);
+                }
+              }
+            }
+
+            // Only one level label: keep the first one found.
+            const levels = [...toAdd].filter(l => l.startsWith('level '));
+            if (levels.length > 1) {
+              levels.slice(1).forEach(l => toAdd.delete(l));
+            }
+
+            const existing = pr.labels.map(l => l.name);
+            const missing = [...toAdd].filter(l => !existing.includes(l));
+            if (missing.length === 0) {
+              core.info('PR already has the inherited labels.');
+              return;
+            }
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              labels: missing,
+            });
+            core.info(`Added ${missing.join(', ')} to #${pr.number} (from issue(s) ${linked.join(', ')}).`);

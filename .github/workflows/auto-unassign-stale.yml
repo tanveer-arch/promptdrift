@@ -1,0 +1,102 @@
+# Auto-unassign stale assignments
+#
+# Rule (maintainer's decision, 2026-11-17): if an assignee opens no PR for
+# their issue within 7 days of being assigned, the issue is automatically
+# unassigned so someone else can pick it up.
+#
+# How "has a PR" is decided: a PR counts as linked when it references the
+# issue number anywhere (e.g. "Fixes #53" in the PR body, or any mention of
+# the issue in the PR). The workflow reads the issue timeline's
+# cross-referenced events for this. A PR that never mentions its issue
+# number will NOT count — contributors must link the issue in the PR.
+#
+# What counts as the assignment date: the most recent `assigned` event on
+# the issue timeline (so a re-assignment restarts the 7-day clock).
+#
+# Runs daily at 11:00 IST (05:30 UTC) and can also be run manually from the
+# Actions tab (workflow_dispatch).
+
+name: Auto-unassign stale assignments
+
+on:
+  schedule:
+    - cron: '30 5 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+
+jobs:
+  unassign-stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const STALE_DAYS = 7;
+            const now = new Date();
+
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+
+            for (const issue of issues) {
+              if (issue.pull_request) continue; // issues only, not PRs
+
+              const assignees = issue.assignees.map(a => a.login);
+              if (assignees.length === 0) continue;
+
+              const timeline = await github.paginate(
+                github.rest.issues.listEventsForTimeline,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  per_page: 100,
+                }
+              );
+
+              // Most recent assignment restarts the clock.
+              const assignedEvents = timeline.filter(e => e.event === 'assigned');
+              if (assignedEvents.length === 0) continue;
+              const lastAssigned = new Date(
+                assignedEvents[assignedEvents.length - 1].created_at
+              );
+              const ageDays = (now - lastAssigned) / (1000 * 60 * 60 * 24);
+              if (ageDays < STALE_DAYS) continue;
+
+              // A PR counts as linked when it references this issue number.
+              const linkedPrs = timeline.filter(
+                e =>
+                  e.event === 'cross-referenced' &&
+                  e.source &&
+                  e.source.type === 'issue' &&
+                  e.source.issue &&
+                  e.source.issue.pull_request
+              );
+              if (linkedPrs.length > 0) continue;
+
+              await github.rest.issues.removeAssignees({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                assignees,
+              });
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body:
+                  `Hi ${assignees.map(a => '@' + a).join(' ')} — auto-unassigning this issue: ` +
+                  `no PR was opened within ${STALE_DAYS} days of assignment. No hard feelings at all — ` +
+                  `if you're still interested, please comment here and I'll assign it back to you.`,
+              });
+
+              core.info(
+                `Unassigned #${issue.number} (was: ${assignees.join(', ')}, assigned ${Math.floor(ageDays)} days ago, no linked PR)`
+              );
+            }
