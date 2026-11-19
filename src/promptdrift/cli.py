@@ -26,6 +26,7 @@ from .errors import (
     ConfigError,
     EvaluationError,
     PromptDriftError,
+    ProviderBudgetExceededError,
     ProviderError,
     TemplateError,
 )
@@ -804,6 +805,9 @@ def monitor(
         code = 3 if isinstance(error, ProviderError) else 2
         # Config/parser errors can contain private YAML values. Do not publish them in CI JSON.
         message = "Monitoring could not start. Check configuration, baseline and prompt files locally with 'promptdrift doctor'."
+        if isinstance(error, ProviderBudgetExceededError):
+            # Budget messages hold only counts and setting names, and say how to fix the run.
+            message = str(error)
         if json_output:
             typer.echo(
                 json.dumps(
