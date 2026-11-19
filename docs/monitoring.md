@@ -22,12 +22,12 @@ promptdrift history --config path/to/promptdrift.yaml --limit 20 --json
 promptdrift baselines --config path/to/promptdrift.yaml --json
 ```
 
-- Samples default to 3, allowed range 1–20. Each case receives fresh requests without caching or automatic retries.
-- Budget for **samples × active cases** requests. This is not a dollar-budget enforcer. Provider timeouts are 60 seconds for OpenAI-compatible calls and 90 seconds for Ollama, per call.
+- Samples default to 3, allowed range 1–20. Each case receives fresh requests without caching; transient failures are retried only if `resilience.max_retries` is set.
+- Budget for **samples × active cases** requests, plus any retries. An optional `provider.resilience.request_budget` caps all attempts in the run, retries included, and stops the run with `ProviderBudgetExceededError` when used up; see [request budget](providers.md#retries-and-request-budget). This is not a dollar-budget enforcer. Provider timeouts are 60 seconds for OpenAI-compatible calls and 90 seconds for Ollama, per call.
 - YAML tests and promoted scenarios use the same suite resolution for baselines, tests, monitoring and PR checks. Missing explicitly configured scenario libraries and empty suites are errors.
 - The canonical baseline must exist and parse successfully. Legacy v1/v2 baselines work, but cannot establish provenance equality.
 - All prompt templates are rendered before monitoring requests start. A malformed later template does not leave a partially billed run.
-- Individual provider errors are counted; remaining probes/cases are attempted. Provider errors take precedence in the exit code.
+- Individual provider errors are counted; remaining probes/cases are attempted. Provider errors take precedence in the exit code. An exhausted request budget is the exception: it stops the run.
 - Removed baseline cases are visible as warnings with zero probes. A new passing case is also a warning, not a regression.
 
 | Exit | Meaning |

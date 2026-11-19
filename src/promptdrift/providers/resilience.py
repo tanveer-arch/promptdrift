@@ -10,6 +10,7 @@ import httpx
 
 from promptdrift.errors import (
     ProviderAuthError,
+    ProviderBudgetExceededError,
     ProviderError,
     ProviderRateLimitError,
     ProviderResponseError,
@@ -143,6 +144,31 @@ def classify_error(exc: Exception, provider_name: str) -> tuple[ProviderError, b
     )
 
 
+class RequestBudget:
+    """Counts every provider attempt, retries included, against one run's request budget."""
+
+    def __init__(self, limit: int):
+        self.limit = limit
+        self.attempts = 0
+        self.retries = 0
+
+    def check(self) -> None:
+        """Raise instead of letting another attempt exceed the limit."""
+        if self.attempts >= self.limit:
+            retries = "1 was a retry" if self.retries == 1 else f"{self.retries} were retries"
+            raise ProviderBudgetExceededError(
+                f"Request budget of {self.limit} exhausted after {self.attempts} provider "
+                f"attempts ({retries}). Increase provider.resilience.request_budget "
+                "or lower max_retries/samples."
+            )
+
+    def consume(self, *, retry: bool = False) -> None:
+        """Reserve one attempt just before it is made."""
+        self.check()
+        self.attempts += 1
+        self.retries += retry
+
+
 class ResilienceExecutor:
     """Manages execution retries with backoff, timeout budgets, and error categorization."""
 
@@ -152,11 +178,13 @@ class ResilienceExecutor:
         provider_name: str,
         clock: Callable[[], float] = time.perf_counter,
         sleeper: Callable[[float], None] = time.sleep,
+        budget: RequestBudget | None = None,
     ):
         self.config = config
         self.provider_name = provider_name
         self.clock = clock
         self.sleeper = sleeper
+        self.budget = budget
         self.attempts_made = 0
 
     def execute(
@@ -181,6 +209,10 @@ class ResilienceExecutor:
             else:
                 current_timeout = self.config.timeout
 
+            # Reserve the attempt just before making it, outside the try block so exhaustion
+            # is never classified as retryable.
+            if self.budget is not None:
+                self.budget.consume(retry=attempt > 0)
             try:
                 return fn(current_timeout)
             except Exception as exc:
@@ -188,6 +220,9 @@ class ResilienceExecutor:
                 is_last_attempt = attempt >= max_attempts - 1
                 if not is_retryable or is_last_attempt:
                     raise err from exc
+                if self.budget is not None:
+                    # Don't back off for a retry the budget can no longer pay for.
+                    self.budget.check()
 
                 delay = calculate_backoff(attempt, self.config, retry_after)
                 elapsed_now = self.clock() - start_time
