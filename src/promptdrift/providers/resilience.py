@@ -152,14 +152,19 @@ class RequestBudget:
         self.attempts = 0
         self.retries = 0
 
-    def consume(self, *, retry: bool = False) -> None:
-        """Reserve one attempt before it is made; raise instead of exceeding the limit."""
+    def check(self) -> None:
+        """Raise instead of letting another attempt exceed the limit."""
         if self.attempts >= self.limit:
+            retries = "1 was a retry" if self.retries == 1 else f"{self.retries} were retries"
             raise ProviderBudgetExceededError(
                 f"Request budget of {self.limit} exhausted after {self.attempts} provider "
-                f"attempts ({self.retries} were retries). Increase "
-                "provider.resilience.request_budget or lower max_retries/samples."
+                f"attempts ({retries}). Increase provider.resilience.request_budget "
+                "or lower max_retries/samples."
             )
+
+    def consume(self, *, retry: bool = False) -> None:
+        """Reserve one attempt just before it is made."""
+        self.check()
         self.attempts += 1
         self.retries += retry
 
@@ -215,6 +220,9 @@ class ResilienceExecutor:
                 is_last_attempt = attempt >= max_attempts - 1
                 if not is_retryable or is_last_attempt:
                     raise err from exc
+                if self.budget is not None:
+                    # Don't back off for a retry the budget can no longer pay for.
+                    self.budget.check()
 
                 delay = calculate_backoff(attempt, self.config, retry_after)
                 elapsed_now = self.clock() - start_time
