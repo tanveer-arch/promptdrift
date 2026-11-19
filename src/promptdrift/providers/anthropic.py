@@ -12,7 +12,7 @@ from promptdrift.errors import ProviderAuthError, ProviderResponseError
 from promptdrift.models.result import ModelResponse
 
 from .base import Provider
-from .resilience import ResilienceExecutor
+from .resilience import RequestBudget, ResilienceExecutor
 
 ANTHROPIC_VERSION = "2023-06-01"
 
@@ -24,6 +24,7 @@ class AnthropicProvider(Provider):
         executor: ResilienceExecutor | None = None,
         clock: Callable[[], float] = time.perf_counter,
         sleeper: Callable[[float], None] = time.sleep,
+        budget: RequestBudget | None = None,
     ):
         self.config = config
         self.executor = executor or ResilienceExecutor(
@@ -31,6 +32,7 @@ class AnthropicProvider(Provider):
             provider_name="Anthropic",
             clock=clock,
             sleeper=sleeper,
+            budget=budget,
         )
 
     def complete(self, prompt: str, *, temperature: float, max_output_tokens: int) -> ModelResponse:

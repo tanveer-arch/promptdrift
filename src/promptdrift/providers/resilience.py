@@ -10,6 +10,7 @@ import httpx
 
 from promptdrift.errors import (
     ProviderAuthError,
+    ProviderBudgetExceededError,
     ProviderError,
     ProviderRateLimitError,
     ProviderResponseError,
@@ -143,6 +144,26 @@ def classify_error(exc: Exception, provider_name: str) -> tuple[ProviderError, b
     )
 
 
+class RequestBudget:
+    """Counts every provider attempt, retries included, against one run's request budget."""
+
+    def __init__(self, limit: int):
+        self.limit = limit
+        self.attempts = 0
+        self.retries = 0
+
+    def consume(self, *, retry: bool = False) -> None:
+        """Reserve one attempt before it is made; raise instead of exceeding the limit."""
+        if self.attempts >= self.limit:
+            raise ProviderBudgetExceededError(
+                f"Request budget of {self.limit} exhausted after {self.attempts} provider "
+                f"attempts ({self.retries} were retries). Increase "
+                "provider.resilience.request_budget or lower max_retries/samples."
+            )
+        self.attempts += 1
+        self.retries += retry
+
+
 class ResilienceExecutor:
     """Manages execution retries with backoff, timeout budgets, and error categorization."""
 
@@ -152,11 +173,13 @@ class ResilienceExecutor:
         provider_name: str,
         clock: Callable[[], float] = time.perf_counter,
         sleeper: Callable[[float], None] = time.sleep,
+        budget: RequestBudget | None = None,
     ):
         self.config = config
         self.provider_name = provider_name
         self.clock = clock
         self.sleeper = sleeper
+        self.budget = budget
         self.attempts_made = 0
 
     def execute(
@@ -181,6 +204,10 @@ class ResilienceExecutor:
             else:
                 current_timeout = self.config.timeout
 
+            # Reserve the attempt just before making it, outside the try block so exhaustion
+            # is never classified as retryable.
+            if self.budget is not None:
+                self.budget.consume(retry=attempt > 0)
             try:
                 return fn(current_timeout)
             except Exception as exc:

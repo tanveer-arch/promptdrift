@@ -8,13 +8,18 @@ import time
 from promptdrift.models.result import ModelResponse
 
 from .base import Provider
+from .resilience import RequestBudget
 
 
 class MockProvider(Provider):
-    def __init__(self, config):
+    def __init__(self, config, budget: RequestBudget | None = None):
         self.config = config
+        self.budget = budget
 
     def complete(self, prompt: str, *, temperature: float, max_output_tokens: int) -> ModelResponse:
+        # No retries here, but each call still counts so budget behaviour is testable offline.
+        if self.budget is not None:
+            self.budget.consume()
         start = time.perf_counter()
         # The mock echoes explicit template values, making init usable without a network.
         output = re.sub(r"\s+", " ", prompt).strip()

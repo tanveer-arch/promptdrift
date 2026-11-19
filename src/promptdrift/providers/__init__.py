@@ -3,7 +3,7 @@ from .base import Provider
 from .mock import MockProvider
 from .ollama import OllamaProvider
 from .openai import OpenAIProvider
-from .resilience import ResilienceExecutor
+from .resilience import RequestBudget, ResilienceExecutor
 
 __all__ = [
     "AnthropicProvider",
@@ -11,16 +11,17 @@ __all__ = [
     "OllamaProvider",
     "OpenAIProvider",
     "Provider",
+    "RequestBudget",
     "ResilienceExecutor",
     "create_provider",
 ]
 
 
-def create_provider(config):
+def create_provider(config, budget: RequestBudget | None = None):
     providers = {
         "openai": OpenAIProvider,
         "ollama": OllamaProvider,
         "mock": MockProvider,
         "anthropic": AnthropicProvider,
     }
-    return providers[config.type](config)
+    return providers[config.type](config, budget=budget)
