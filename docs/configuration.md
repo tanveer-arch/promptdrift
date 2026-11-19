@@ -82,6 +82,8 @@ tests:
 | `api_key_env` | string | No | `null` | Environment variable holding the API key |
 | `base_url` | string | No | `null` | Custom API endpoint URL |
 | `system` | string | No | `null` | Anthropic only. Optional system prompt sent in the `system` field |
+| `resilience.max_retries` | int | No | `0` | Retries for transient failures (0–10) |
+| `resilience.request_budget` | int | No | `null` | Maximum provider attempts per run, retries included; `null` is unlimited. See [request budget](providers.md#retries-and-request-budget) |
 
 ### Defaults
 
