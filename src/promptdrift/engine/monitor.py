@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from promptdrift.engine.baseline import load_baseline
+from promptdrift.engine.baseline import calculate_wilson_interval, load_baseline
 from promptdrift.engine.provenance import ENVELOPE_COMPONENTS, fingerprint, with_response
 from promptdrift.engine.runner import evaluate_response, evaluation_status
 from promptdrift.engine.suite import resolve_suite
@@ -102,6 +102,36 @@ def _diagnose(
     evidence.append(
         "Rendered input, generation settings, configured provider, contracts and PromptDrift version match the baseline."
     )
+    if old and old.distribution is not None and old.distribution.samples >= 2:
+        dist = old.distribution
+        total_passes = sum(c.get("pass", 0) for c in dist.assertion_counts.values())
+        total_evals = sum(
+            c.get("pass", 0) + c.get("fail", 0) for c in dist.assertion_counts.values()
+        )
+        if total_evals > 0:
+            lower_ci, upper_ci = calculate_wilson_interval(
+                total_passes, total_evals, confidence=0.95
+            )
+            probe_pass_rate = (samples - behavioral_failures) / samples
+            evidence.append(
+                f"Calibrated reference distribution ({dist.samples} baseline samples): "
+                f"baseline pass rate {total_passes}/{total_evals} ({total_passes / total_evals:.1%}), "
+                f"95% Wilson CI [{lower_ci:.1%}, {upper_ci:.1%}]; "
+                f"probe pass rate {samples - behavioral_failures}/{samples} ({probe_pass_rate:.1%})."
+            )
+            if behavioral_failures > 0:
+                if probe_pass_rate < lower_ci:
+                    return (
+                        "observed_model_drift",
+                        "Probe pass rate dropped significantly below calibrated baseline distribution confidence interval.",
+                        evidence,
+                    )
+                return (
+                    "stable",
+                    "Probe contract pass rate is within expected variance of calibrated baseline distribution.",
+                    evidence,
+                )
+
     if 0 < behavioral_failures < samples:
         return (
             "stochastic_behavior",
@@ -219,7 +249,10 @@ def monitor_suite(
             }
             observed_provenance = observed
             if old:
-                changes += observed_output_hash != old.output_hash
+                if old.distribution is not None and old.distribution.output_hashes:
+                    changes += observed_output_hash not in old.distribution.output_hashes
+                else:
+                    changes += observed_output_hash != old.output_hash
                 if old.provenance:
                     for field in ("response_model_hash", "system_fingerprint_hash"):
                         before, after = getattr(old.provenance, field), getattr(observed, field)

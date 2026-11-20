@@ -59,6 +59,18 @@ tests:
 - Before hashing, scalar values under credential-named keys are removed at any depth (`api_key`, `x-api-key`, `token`, `access_token`, `refresh_token`, `session_token`, `secret`, `client_secret`, `password`, `private_key`, `authorization`, `credential(s)`, `cookie`, `set-cookie`). Matching ignores case, `-` and `_`, and is exact, so `max_tokens` is kept. Object values are kept, so a tool parameter schema named `password` still counts. Long `sk-…` and `Bearer …` strings are masked. Do not store real credentials in configuration regardless.
 - Cases without an envelope omit `envelope_hashes` entirely; their baselines are unchanged and existing v1–v3 baselines load as before. Promoted scenarios (`scenarios.json`) cannot declare an envelope yet.
 
+## Calibrated reference distributions
+
+Stochastic generative variance across LLM clusters means a single point sample can cause false alarms during monitoring. You can calibrate the baseline across multiple samples:
+
+```bash
+promptdrift baseline --samples 10
+```
+
+- **`distribution` field:** When `--samples > 1`, `BaselineTest.distribution` records empirical contract pass rates, assertion counts (`pass`/`fail`), distinct output hashes, latency percentiles (`latency_p50_ms`, `latency_p95_ms`), and average token usage.
+- **Statistical drift calibration:** During `promptdrift monitor`, probe pass rates are evaluated against the Wilson score 95% confidence interval of the baseline reference distribution. If the probe pass rate remains within expected baseline variance, it is triaged as `stable` instead of raising false `stochastic_behavior` alarms. If the pass rate drops significantly below the confidence interval lower bound, it is triaged as `observed_model_drift`.
+- **Zero cost & privacy:** Persists only pass rates, counts, and output hashes; zero raw text is saved. Legacy baselines (`samples: 1` or older schema versions) default `distribution` to `None` and preserve heuristic single-sample triage.
+
 ## Selective acceptance
 
 ```bash

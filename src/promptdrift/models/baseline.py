@@ -10,6 +10,17 @@ from pydantic import BaseModel, ConfigDict, Field
 from .provenance import Provenance
 
 
+class BaselineDistribution(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    samples: int = Field(ge=1)
+    pass_rates: dict[str, float] = Field(default_factory=dict)
+    assertion_counts: dict[str, dict[str, int]] = Field(default_factory=dict)
+    output_hashes: list[str] = Field(default_factory=list)
+    latency_p50_ms: float | None = None
+    latency_p95_ms: float | None = None
+    token_usage_avg: float | None = None
+
+
 class BaselineTest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     output_hash: str
@@ -19,6 +30,7 @@ class BaselineTest(BaseModel):
     metrics: dict[str, float | int | None]
     evaluator_scores: dict[str, float | None] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    distribution: BaselineDistribution | None = None
 
 
 class Baseline(BaseModel):

@@ -30,6 +30,7 @@ from .errors import (
     TemplateError,
 )
 from .git import GitContext
+from .models import TestRun
 from .reports import (
     print_impact_report,
     print_report,
@@ -572,6 +573,16 @@ def baseline(
     config: Annotated[Path, typer.Option("--config", "-c", help="Config file path.")] = Path(
         "promptdrift.yaml"
     ),
+    samples: Annotated[
+        int,
+        typer.Option(
+            "--samples",
+            "-s",
+            help="Number of calibration samples to estimate empirical reference distribution.",
+            min=1,
+            max=20,
+        ),
+    ] = 1,
     force: Annotated[bool, typer.Option(help="Replace an existing baseline.")] = False,
     accept_regressions: Annotated[
         bool, typer.Option("--accept-regressions", help="Explicitly allow a failing baseline.")
@@ -588,21 +599,53 @@ def baseline(
     except PromptDriftError as error:
         _exit_error(error, verbose)
         return
-    result = _run(config, with_baseline=False, verbose=verbose)
-    if not result:
-        return
-    loaded, config_path, report = result
+
+    runs_by_test: dict[str, list[TestRun]] = {}
+    primary_report = None
+    target_path = None
+
+    for _ in range(samples):
+        result = _run(config, with_baseline=False, verbose=verbose)
+        if not result:
+            return
+        loaded, config_path, report = result
+        if primary_report is None:
+            primary_report = report
+            target_path = loaded.resolve_path(config_path, loaded.baseline.path)
+        for run in report.tests:
+            runs_by_test.setdefault(run.test_id, []).append(run)
+
     try:
-        if report.counts["FAIL"] and not accept_regressions:
+        assert primary_report is not None
+        assert target_path is not None
+        if primary_report.counts["FAIL"] and not accept_regressions:
             raise BaselineError(
                 "Refusing a failing baseline. Review failures or use --accept-regressions explicitly."
             )
-        path = loaded.resolve_path(config_path, loaded.baseline.path)
-        write_baseline(path, report, force=force)
+        write_baseline(
+            target_path,
+            primary_report,
+            force=force,
+            runs_by_test=runs_by_test if samples > 1 else None,
+        )
         if json_output:
-            typer.echo(json.dumps({"baseline": str(path), "status": "created"}, indent=2))
+            typer.echo(
+                json.dumps(
+                    {
+                        "baseline": str(target_path),
+                        "status": "created",
+                        "samples": samples,
+                    },
+                    indent=2,
+                )
+            )
         else:
-            console.print(f"[green]Baseline written:[/] {path}")
+            if samples > 1:
+                console.print(
+                    f"[green]Calibrated baseline written ({samples} samples):[/] {target_path}"
+                )
+            else:
+                console.print(f"[green]Baseline written:[/] {target_path}")
     except PromptDriftError as error:
         _exit_error(error, verbose)
 
