@@ -32,13 +32,14 @@ def evaluate_assertion(assertion: Assertion, response: ModelResponse) -> Evaluat
     text = response.output
     kind, value = assertion.type, assertion.value
     if kind == "exact_match":
+        expected = str(value)
         return _result(
             assertion,
-            text == value,
-            value,
+            text == expected,
+            expected,
             text,
             "Output exactly matches expected value."
-            if text == value
+            if text == expected
             else "Output does not exactly match expected value.",
         )
     if kind == "contains":
