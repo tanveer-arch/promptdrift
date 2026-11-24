@@ -11,7 +11,7 @@ import hashlib
 from pathlib import Path
 
 from promptdrift.engine.baseline import calculate_wilson_interval, load_baseline
-from promptdrift.engine.provenance import ENVELOPE_COMPONENTS, fingerprint, with_response
+from promptdrift.engine.provenance import ENVELOPE_COMPONENTS, digest, fingerprint, with_response
 from promptdrift.engine.runner import evaluate_response, evaluation_status
 from promptdrift.engine.suite import resolve_suite
 from promptdrift.errors import ConfigError, ProviderBudgetExceededError, ProviderError
@@ -62,6 +62,12 @@ def _diagnose(
             )
         elif before is not None and after is not None:
             for component in ENVELOPE_COMPONENTS:
+                if (
+                    component == "uncaptured"
+                    and component not in before
+                    and (after.get(component) is None or after.get(component) == digest([]))
+                ):
+                    continue
                 if before.get(component) != after.get(component):
                     changed_fields.append("prompt_changed")
                     evidence.append(

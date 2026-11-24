@@ -139,9 +139,14 @@ class RequestEnvelope(BaseModel):
     """Declared request context for provenance only; it is never sent to a provider."""
 
     model_config = ConfigDict(extra="forbid")
+    version: int = 1
     system: str | None = None
     tools: list[ToolSchema] = Field(default_factory=list)
     retrieval_context: dict[str, Any] = Field(default_factory=dict)
+    uncaptured: list[str] = Field(
+        default_factory=list,
+        description="Explicitly declared unmonitored dimensions (e.g. ['retrieval_ranking', 'embedding_model'])",
+    )
 
     @model_validator(mode="after")
     def reject_duplicate_tools(self) -> RequestEnvelope:
