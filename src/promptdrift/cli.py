@@ -17,6 +17,7 @@ from .engine.baseline import atomic_write, load_baseline, write_baseline
 from .engine.capture import create_interaction
 from .engine.check import orchestrate_check
 from .engine.discovery import discover_scenarios
+from .engine.experiment import run_experiment
 from .engine.regression import compare_to_baseline
 from .engine.runner import run_suite
 from .engine.suggest import suggest_assertions_for_scenario
@@ -30,7 +31,7 @@ from .errors import (
     TemplateError,
 )
 from .git import GitContext
-from .models import TestRun
+from .models import ExperimentArmConfig, ExperimentConfig, TestRun
 from .reports import (
     print_impact_report,
     print_report,
@@ -923,6 +924,107 @@ def demo(json_output: Annotated[bool, typer.Option("--json")] = False) -> None:
 
         console.print("Synthetic local demo: fixture responses changed, not a real model update.")
         print_monitor_report(report, console)
+
+
+@app.command()
+def experiment(
+    candidate_model: Annotated[
+        str | None,
+        typer.Option("--candidate-model", help="Candidate model to compare against control."),
+    ] = None,
+    candidate_provider: Annotated[
+        str | None,
+        typer.Option(
+            "--candidate-provider", help="Candidate provider type (e.g. openai, ollama, mock)."
+        ),
+    ] = None,
+    request_budget: Annotated[
+        int | None,
+        typer.Option(
+            "--request-budget", help="Experiment-wide request budget cap across all arms."
+        ),
+    ] = None,
+    config: Annotated[
+        Path | None,
+        typer.Option("-c", "--config", help="Path to promptdrift configuration file."),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Emit machine-readable JSON paired manifest."),
+    ] = False,
+) -> None:
+    """Execute paired candidate-versus-control experiment runs on frozen scenario inputs."""
+    from rich.table import Table
+
+    cfg, cfg_path = load_config(config)
+
+    control_arm = ExperimentArmConfig(
+        name="control",
+        provider=cfg.provider.model_copy(deep=True),
+        temperature=cfg.defaults.temperature,
+        max_output_tokens=cfg.defaults.max_output_tokens,
+    )
+
+    cand_provider = cfg.provider.model_copy(deep=True)
+    if candidate_model is not None:
+        cand_provider.model = candidate_model
+    if candidate_provider is not None:
+        cand_provider.type = candidate_provider  # type: ignore[assignment]
+
+    candidate_arm = ExperimentArmConfig(
+        name="candidate",
+        provider=cand_provider,
+        temperature=cfg.defaults.temperature,
+        max_output_tokens=cfg.defaults.max_output_tokens,
+    )
+
+    exp_config = ExperimentConfig(
+        name="cli_experiment",
+        control=control_arm,
+        candidate=candidate_arm,
+        request_budget=request_budget,
+    )
+
+    report = run_experiment(cfg, exp_config, cfg_path)
+
+    if json_output:
+        typer.echo(report.model_dump_json(indent=2))
+        return
+
+    table = Table(title=f"Experiment Run: {report.control_arm} vs {report.candidate_arm}")
+    table.add_column("Scenario ID", style="cyan")
+    table.add_column("Control", justify="center")
+    table.add_column("Candidate", justify="center")
+    table.add_column("Comparison", justify="center")
+    table.add_column("Latency Δ (ms)", justify="right")
+    table.add_column("Token Δ", justify="right")
+
+    for pair in report.pairs:
+        status_style = (
+            "green" if pair.status == "PASS" else ("yellow" if pair.status == "WARN" else "red")
+        )
+        lat_str = f"{pair.latency_delta_ms:+0.1f}" if pair.latency_delta_ms is not None else "-"
+        tok_str = f"{pair.token_delta:+d}" if pair.token_delta is not None else "-"
+        table.add_row(
+            pair.scenario_id,
+            pair.control.status,
+            pair.candidate.status,
+            f"[{status_style}]{pair.status}[/{status_style}]",
+            lat_str,
+            tok_str,
+        )
+
+    console.print(table)
+    console.print(
+        f"\n[bold]Total Pairs:[/] {report.total_pairs} | "
+        f"[green]Passed:[/] {report.passed_pairs} | "
+        f"[red]Failed:[/] {report.failed_pairs} | "
+        f"[yellow]Incomparable:[/] {report.incomparable_pairs} | "
+        f"Requests: {report.total_requests} in {report.duration_ms}ms"
+    )
+
+    if report.failed_pairs > 0 or report.incomparable_pairs > 0:
+        raise typer.Exit(code=1)
 
 
 @app.command()
