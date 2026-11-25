@@ -154,7 +154,8 @@ class RequestEnvelope(BaseModel):
 class TestCase(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
-    prompt: str
+    prompt: str | None = None
+    prompt_text: str | None = None
     variables: dict[str, Any] = Field(default_factory=dict)
     request_envelope: RequestEnvelope | None = None
     assertions: list[Assertion] = Field(default_factory=list)
@@ -163,6 +164,14 @@ class TestCase(BaseModel):
     thresholds: dict[Literal["latency_ms", "cost_usd"], Threshold | float] = Field(
         default_factory=dict
     )
+
+    @model_validator(mode="after")
+    def validate_prompt_source(self) -> TestCase:
+        if (self.prompt is None and self.prompt_text is None) or (
+            self.prompt is not None and self.prompt_text is not None
+        ):
+            raise ValueError("Exactly one of 'prompt' or 'prompt_text' must be provided")
+        return self
 
     @model_validator(mode="after")
     def reject_unimplemented_evaluators(self) -> TestCase:

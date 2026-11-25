@@ -20,7 +20,7 @@ from promptdrift.models.monitor import Diagnosis, MonitorCase, MonitorReport, Sa
 from promptdrift.models.provenance import Provenance
 from promptdrift.providers import create_provider
 from promptdrift.storage.snapshots import save_snapshot, snapshot_from_report
-from promptdrift.templates import render_prompt
+from promptdrift.templates import render_prompt, render_prompt_text
 
 OPERATIONAL_ASSERTIONS = {"latency_ms", "cost_usd", "max_tokens"}
 
@@ -174,7 +174,10 @@ def monitor_suite(
     active, _ = resolve_suite(config, config_path)
     prepared: list[tuple[TestCase, str, Provenance]] = []
     for test in active.tests:
-        prompt = render_prompt(active.resolve_path(config_path, test.prompt), test.variables)
+        if test.prompt_text is not None:
+            prompt = render_prompt_text(test.prompt_text, test.variables)
+        else:
+            prompt = render_prompt(active.resolve_path(config_path, test.prompt), test.variables)
         prepared.append((test, prompt, fingerprint(active, test, prompt)))
 
     request_budget = active.provider.resilience.request_budget
