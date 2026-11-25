@@ -14,11 +14,24 @@ from collections.abc import Callable
 EMAIL_PATTERN = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
 PHONE_PATTERN = r"\+?1?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}"
 API_TOKEN_PATTERN = r"(?:Bearer\s+|sk-|api[_-]?key[=:]\s*)[A-Za-z0-9_\-./]{8,}"
+CREDIT_CARD_PATTERN = (
+    r"\b(?:"
+    r"4\d{3}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{1,4}"  # Visa (13-16 digits)
+    r"|5[1-5]\d{2}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}"  # MasterCard (16 digits)
+    r"|2[2-7]\d{2}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}"  # MasterCard 2xxx series
+    r"|3[47]\d{2}[-\s]?\d{6}[-\s]?\d{5}"  # American Express (15 digits)
+    r"|6(?:011|5\d{2})[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}"  # Discover
+    r"|\d{4}[-\s]\d{4}[-\s]\d{4}[-\s]\d{1,7}"  # Generic delimited cards (13-19 digits)
+    r")\b"
+)
+SSN_PATTERN = r"\b\d{3}[-\s]\d{2}[-\s]\d{4}\b"
 
 BUILTIN_PATTERNS = {
     "email": EMAIL_PATTERN,
     "phone": PHONE_PATTERN,
     "api_token": API_TOKEN_PATTERN,
+    "credit_card": CREDIT_CARD_PATTERN,
+    "ssn": SSN_PATTERN,
 }
 
 _REDACTED = "[REDACTED]"
