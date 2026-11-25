@@ -190,3 +190,27 @@ class TestStorageConfig:
         )
         with pytest.raises(ConfigError, match="extra_field"):
             load_config(path)
+
+    def test_loads_inline_prompt_text(self, tmp_path):
+        path = tmp_path / "promptdrift.yaml"
+        path.write_text(
+            "version: 1\nprovider: {type: mock}\ntests:\n  - id: inline_test\n    prompt_text: 'Say hello to {{ name }}'\n"
+        )
+        config, _ = load_config(path)
+        assert len(config.tests) == 1
+        assert config.tests[0].prompt is None
+        assert config.tests[0].prompt_text == "Say hello to {{ name }}"
+
+    def test_rejects_both_prompt_and_prompt_text(self, tmp_path):
+        path = tmp_path / "promptdrift.yaml"
+        path.write_text(
+            "version: 1\nprovider: {type: mock}\ntests:\n  - id: conflict\n    prompt: file.txt\n    prompt_text: 'inline'\n"
+        )
+        with pytest.raises(ConfigError, match="Exactly one of 'prompt' or 'prompt_text'"):
+            load_config(path)
+
+    def test_rejects_neither_prompt_nor_prompt_text(self, tmp_path):
+        path = tmp_path / "promptdrift.yaml"
+        path.write_text("version: 1\nprovider: {type: mock}\ntests:\n  - id: missing\n")
+        with pytest.raises(ConfigError, match="Exactly one of 'prompt' or 'prompt_text'"):
+            load_config(path)

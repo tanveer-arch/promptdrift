@@ -12,7 +12,7 @@ from promptdrift.models import Config, RegressionReport, TestRun
 from promptdrift.models.result import EvaluationResult, ModelResponse
 from promptdrift.models.test import TestCase
 from promptdrift.providers import create_provider
-from promptdrift.templates import render_prompt
+from promptdrift.templates import render_prompt, render_prompt_text
 
 
 def _threshold_results(test, response):
@@ -78,7 +78,12 @@ def evaluation_status(evaluations: list[EvaluationResult]) -> str:
 def run_suite(config: Config, config_path: Path) -> RegressionReport:
     start = time.perf_counter()
     prepared = [
-        (test, render_prompt(config.resolve_path(config_path, test.prompt), test.variables))
+        (
+            test,
+            render_prompt_text(test.prompt_text, test.variables)
+            if test.prompt_text is not None
+            else render_prompt(config.resolve_path(config_path, test.prompt), test.variables),
+        )
         for test in config.tests
     ]
     request_budget = config.provider.resilience.request_budget
