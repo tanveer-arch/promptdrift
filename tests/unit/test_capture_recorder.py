@@ -324,6 +324,39 @@ class TestRedaction:
         result = apply_redaction(text, ["api_token"])
         assert "sk-abc123defghijklmnop" not in result
 
+    def test_credit_card_pattern(self):
+        # Visa
+        assert apply_redaction("Visa: 4111 1111 1111 1111", ["credit_card"]) == "Visa: [REDACTED]"
+        assert apply_redaction("Visa: 4111-1111-1111-1111", ["credit_card"]) == "Visa: [REDACTED]"
+        assert apply_redaction("Visa: 4111111111111111", ["credit_card"]) == "Visa: [REDACTED]"
+
+        # MasterCard
+        assert apply_redaction("MC: 5100-1234-5678-9012", ["credit_card"]) == "MC: [REDACTED]"
+        assert apply_redaction("MC: 5100 1234 5678 9012", ["credit_card"]) == "MC: [REDACTED]"
+
+        # Amex
+        assert apply_redaction("Amex: 3782-822463-10005", ["credit_card"]) == "Amex: [REDACTED]"
+        assert apply_redaction("Amex: 3782 822463 10005", ["credit_card"]) == "Amex: [REDACTED]"
+
+        # Discover
+        assert apply_redaction("Discover: 6011-1234-5678-9012", ["credit_card"]) == "Discover: [REDACTED]"
+
+    def test_ssn_pattern(self):
+        # Standard dashes and spaces
+        assert apply_redaction("SSN is 123-45-6789 here", ["ssn"]) == "SSN is [REDACTED] here"
+        assert apply_redaction("SSN is 987 65 4321 here", ["ssn"]) == "SSN is [REDACTED] here"
+
+        # Edge cases and non-matches
+        assert apply_redaction("Date: 2026-03-01", ["ssn"]) == "Date: 2026-03-01"
+        assert apply_redaction("Phone: 555-123-4567", ["ssn"]) == "Phone: 555-123-4567"
+
+    def test_combined_patterns_in_capture_config(self):
+        text = "Card: 4111-2222-3333-4444 and SSN: 123-45-6789"
+        result = apply_redaction(text, ["credit_card", "ssn"])
+        assert "4111-2222-3333-4444" not in result
+        assert "123-45-6789" not in result
+        assert result == "Card: [REDACTED] and SSN: [REDACTED]"
+
     def test_custom_regex_pattern(self):
         text = "SSN: 123-45-6789"
         result = apply_redaction(text, [r"\d{3}-\d{2}-\d{4}"])

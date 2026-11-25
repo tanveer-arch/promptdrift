@@ -181,3 +181,20 @@ without treating them as test failures.
 
 The XML report is written before the CLI returns its failure exit code,
 so CI workflows can still collect test results when evaluations fail.
+
+## Capture & Privacy Redaction
+
+PromptDrift supports live interaction capture and automated PII redaction via `CaptureRecorder`.
+Redaction rules can use built-in pattern identifiers or custom regular expressions.
+
+### Supported Built-in Redaction Patterns
+
+| Identifier | Description | Example Matched Values |
+| --- | --- | --- |
+| `email` | Standard email addresses | `user@example.com` |
+| `phone` | International and US phone formats | `+1-555-123-4567`, `(555) 123-4567` |
+| `api_token` | Bearer tokens, OpenAI keys, API secrets | `sk-abc123def456`, `Bearer eyJ...` |
+| `credit_card` | Major payment card numbers (Visa, Mastercard, Amex, Discover, etc.) | `4111-1111-1111-1111`, `3782 822463 10005` |
+| `ssn` | US Social Security Numbers (`XXX-XX-XXXX` or space-delimited) | `123-45-6789`, `987 65 4321` |
+
+When configured, matching substrings are replaced with `[REDACTED]`. Custom regex patterns and callback functions can also be supplied alongside built-in identifiers.
