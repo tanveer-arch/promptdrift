@@ -43,7 +43,9 @@ def orchestrate_check(
     repo_root = git.get_repo_root()
     changed_paths = {(repo_root / item).resolve() for item in changed_files} if repo_root else set()
     prompt_paths_by_id = {
-        test.id: config.resolve_path(config_path, test.prompt).resolve() for test in tests
+        test.id: config.resolve_path(config_path, test.prompt).resolve()
+        for test in tests
+        if test.prompt is not None
     }
     # Git paths are worktree-relative; prompts are config-relative, as in the runner.
     # Only select cases when every change maps to a known prompt. Otherwise run all.
@@ -63,7 +65,9 @@ def orchestrate_check(
         report.baseline_path = str(baseline_path)
 
     current_git_sha = git.get_head_sha()
-    prompt_paths = [config.resolve_path(config_path, t.prompt) for t in tests]
+    prompt_paths = [
+        config.resolve_path(config_path, t.prompt) for t in tests if t.prompt is not None
+    ]
     current_prompt_hash = git.compute_prompt_hash(prompt_paths)
 
     impact = calculate_impact_radius(

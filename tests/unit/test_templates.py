@@ -3,7 +3,7 @@
 import pytest
 
 from promptdrift.errors import TemplateError
-from promptdrift.templates import render_prompt
+from promptdrift.templates import render_prompt, render_prompt_text
 
 
 class TestTemplateRendering:
@@ -11,6 +11,19 @@ class TestTemplateRendering:
         path = tmp_path / "prompt.txt"
         path.write_text("Hello {{ name }}")
         assert render_prompt(path, {"name": "Ada"}) == "Hello Ada"
+
+    def test_renders_inline_single_variable(self):
+        assert render_prompt_text("Hello {{ name }}", {"name": "Ada"}) == "Hello Ada"
+
+    def test_renders_inline_multiple_variables(self):
+        result = render_prompt_text(
+            "{{ greeting }}, {{ name }}! You are {{ age }} years old.",
+            {"greeting": "Hi", "name": "Bob", "age": "30"},
+        )
+        assert result == "Hi, Bob! You are 30 years old."
+
+    def test_renders_inline_no_variables(self):
+        assert render_prompt_text("No variables here.", {}) == "No variables here."
 
     def test_renders_multiple_variables(self, tmp_path):
         path = tmp_path / "prompt.txt"
@@ -77,3 +90,11 @@ class TestTemplateErrors:
         path.write_text("{% if unclosed %}")
         with pytest.raises(TemplateError):
             render_prompt(path, {})
+
+    def test_inline_missing_variable_raises_error(self):
+        with pytest.raises(TemplateError, match="Missing"):
+            render_prompt_text("Hello {{ name }}", {})
+
+    def test_inline_jinja_syntax_error_raises_template_error(self):
+        with pytest.raises(TemplateError):
+            render_prompt_text("{% if unclosed %}", {})

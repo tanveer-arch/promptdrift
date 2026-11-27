@@ -26,3 +26,18 @@ def render_prompt(path: Path, variables: dict[str, Any]) -> str:
         raise
     except Exception as exc:
         raise TemplateError(f"Unable to render {path.name}: {exc}") from exc
+
+
+def render_prompt_text(source: str, variables: dict[str, Any]) -> str:
+    """Render an inline Jinja2 prompt string using a sandboxed environment."""
+    environment = SandboxedEnvironment(undefined=StrictUndefined, autoescape=False)
+    try:
+        parsed = environment.parse(source)
+        missing = sorted(meta.find_undeclared_variables(parsed) - variables.keys())
+        if missing:
+            raise TemplateError("Missing prompt variables: " + ", ".join(missing))
+        return environment.from_string(source).render(**variables)
+    except TemplateError:
+        raise
+    except Exception as exc:
+        raise TemplateError(f"Unable to render prompt text: {exc}") from exc

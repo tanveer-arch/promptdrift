@@ -19,6 +19,15 @@ class TestConfigLoading:
         assert config.version == 1
         assert len(config.tests) == 1
 
+    def test_loads_config_with_inline_prompt_text(self, tmp_path):
+        path = tmp_path / "promptdrift.yaml"
+        path.write_text(
+            'version: 1\nprovider: {type: mock}\ntests:\n  - id: hello\n    prompt_text: "Hello world"\n'
+        )
+        config, _ = load_config(path)
+        assert config.tests[0].prompt is None
+        assert config.tests[0].prompt_text == "Hello world"
+
     def test_loads_full_config(self, tmp_path):
         path = tmp_path / "promptdrift.yaml"
         path.write_text(
@@ -100,6 +109,20 @@ class TestConfigValidation:
             "version: 1\nprovider: {type: mock}\ntests:\n  - id: 'has spaces'\n    prompt: a.txt\n"
         )
         with pytest.raises(ConfigError):
+            load_config(path)
+
+    def test_rejects_both_prompt_and_prompt_text(self, tmp_path):
+        path = tmp_path / "promptdrift.yaml"
+        path.write_text(
+            'version: 1\nprovider: {type: mock}\ntests:\n  - id: hello\n    prompt: p.txt\n    prompt_text: "Hello"\n'
+        )
+        with pytest.raises(ConfigError, match="Exactly one"):
+            load_config(path)
+
+    def test_rejects_neither_prompt_nor_prompt_text(self, tmp_path):
+        path = tmp_path / "promptdrift.yaml"
+        path.write_text("version: 1\nprovider: {type: mock}\ntests:\n  - id: hello\n")
+        with pytest.raises(ConfigError, match="Exactly one"):
             load_config(path)
 
 

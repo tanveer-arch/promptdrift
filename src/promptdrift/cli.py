@@ -758,16 +758,25 @@ def doctor(
             ]
         )
         for test_case in loaded.tests:
-            from .templates import render_prompt
+            from .templates import render_prompt, render_prompt_text
 
+            prompt_label = (
+                test_case.prompt
+                if test_case.prompt is not None
+                else f"inline: {test_case.prompt_text}"
+            )
             try:
-                render_prompt(
-                    loaded.resolve_path(config_path, test_case.prompt), test_case.variables
-                )
+                if test_case.prompt_text is not None:
+                    render_prompt_text(test_case.prompt_text, test_case.variables)
+                else:
+                    assert test_case.prompt is not None
+                    render_prompt(
+                        loaded.resolve_path(config_path, test_case.prompt), test_case.variables
+                    )
                 renderable = True
             except (TemplateError, OSError):
                 renderable = False
-            checks.append({"name": f"Prompt renders: {test_case.prompt}", "passed": renderable})
+            checks.append({"name": f"Prompt renders: {prompt_label}", "passed": renderable})
         key_env_defaults = {"openai": "OPENAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
         if loaded.provider.type in key_env_defaults:
             env = loaded.provider.api_key_env or key_env_defaults[loaded.provider.type]

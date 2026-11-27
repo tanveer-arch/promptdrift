@@ -166,16 +166,18 @@ def accept_from_snapshot(
     failing_cases: list[str] = []
 
     from promptdrift.engine.provenance import fingerprint
-    from promptdrift.templates import render_prompt
+    from promptdrift.templates import render_prompt, render_prompt_text
 
-    current_provenance: dict[str, Provenance] = {
-        test.id: fingerprint(
-            active,
-            test,
-            render_prompt(active.resolve_path(config_path, test.prompt), test.variables),
-        )
-        for test in active.tests
-    }
+    current_provenance: dict[str, Provenance] = {}
+    for test in active.tests:
+        if test.prompt_text is not None:
+            prompt_content = render_prompt_text(test.prompt_text, test.variables)
+        else:
+            assert test.prompt is not None
+            prompt_content = render_prompt(
+                active.resolve_path(config_path, test.prompt), test.variables
+            )
+        current_provenance[test.id] = fingerprint(active, test, prompt_content)
 
     for test_id in target_ids:
         case = report_cases_by_id[test_id]

@@ -89,6 +89,23 @@ class TestTestCommand:
         result = runner.invoke(app, ["test", "--config", str(tmp_path / "promptdrift.yaml")])
         assert result.exit_code == 0
 
+    def test_runs_and_passes_with_inline_prompt_text(self, tmp_path):
+        config_path = tmp_path / "promptdrift.yaml"
+        config_path.write_text(
+            "version: 1\n"
+            "provider: {type: mock}\n"
+            "tests:\n"
+            "  - id: inline-greeting\n"
+            '    prompt_text: "Say hello to {{ name }}."\n'
+            "    variables:\n"
+            "      name: Alice\n"
+            "    assertions:\n"
+            "      - type: contains\n"
+            "        value: Alice\n"
+        )
+        result = runner.invoke(app, ["test", "--config", str(config_path)])
+        assert result.exit_code == 0
+
     def test_runs_on_non_utf_console(self, tmp_path, monkeypatch):
         runner.invoke(app, ["init", "--directory", str(tmp_path)])
         stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")

@@ -118,13 +118,17 @@ default to 5000 milliseconds.
 | Field | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `id` | string | Yes | — | Unique test identifier |
-| `prompt` | string | Yes | — | Path to the Jinja2 prompt template |
+| `prompt` | string | One of `prompt` or `prompt_text` | — | Path to the Jinja2 prompt template; mutually exclusive with `prompt_text` |
+| `prompt_text` | string | One of `prompt` or `prompt_text` | — | Inline Jinja2 prompt template; mutually exclusive with `prompt` |
 | `variables` | dict | No | `{}` | Key-value pairs passed to the template |
 | `request_envelope` | object | No | — | Declared `system`, `tools` and `retrieval_context` for provenance hashing only; see [baselines](baselines.md#request-envelopes) |
 | `assertions` | list | No | `[]` | Deterministic behavioral contracts |
 | `thresholds` | dict | No | `{}` | `latency_ms` and `cost_usd` limits; unknown cost cannot satisfy a limit |
 | `output` | object | No | `{format: text}` | `format: json` adds a JSON-validity contract |
 | `evaluators` | list | No | `[]` | Nonempty lists are rejected; semantic/judge evaluators are not implemented |
+
+Exactly one of `prompt` or `prompt_text` must be provided for each test. Inline templates use the
+same variable rendering and provenance hashing as file-backed prompts.
 
 ### Assertion
 
