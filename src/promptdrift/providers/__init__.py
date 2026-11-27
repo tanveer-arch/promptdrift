@@ -1,5 +1,6 @@
 from .anthropic import AnthropicProvider
 from .base import Provider
+from .gemini import GeminiProvider
 from .mock import MockProvider
 from .ollama import OllamaProvider
 from .openai import OpenAIProvider
@@ -7,6 +8,7 @@ from .resilience import ResilienceExecutor
 
 __all__ = [
     "AnthropicProvider",
+    "GeminiProvider",
     "MockProvider",
     "OllamaProvider",
     "OpenAIProvider",
@@ -22,5 +24,6 @@ def create_provider(config):
         "ollama": OllamaProvider,
         "mock": MockProvider,
         "anthropic": AnthropicProvider,
+        "gemini": GeminiProvider,
     }
     return providers[config.type](config)
