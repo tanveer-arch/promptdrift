@@ -12,7 +12,7 @@ from promptdrift.errors import ProviderAuthError
 from promptdrift.models.result import ModelResponse
 
 from .base import Provider
-from .resilience import ResilienceExecutor
+from .resilience import RequestBudget, ResilienceExecutor
 
 
 class OpenAIProvider(Provider):
@@ -22,6 +22,7 @@ class OpenAIProvider(Provider):
         executor: ResilienceExecutor | None = None,
         clock: Callable[[], float] = time.perf_counter,
         sleeper: Callable[[float], None] = time.sleep,
+        budget: RequestBudget | None = None,
     ):
         self.config = config
         self.executor = executor or ResilienceExecutor(
@@ -29,6 +30,7 @@ class OpenAIProvider(Provider):
             provider_name="OpenAI",
             clock=clock,
             sleeper=sleeper,
+            budget=budget,
         )
 
     def complete(self, prompt: str, *, temperature: float, max_output_tokens: int) -> ModelResponse:

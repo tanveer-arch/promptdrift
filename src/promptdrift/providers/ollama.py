@@ -10,7 +10,7 @@ import httpx
 from promptdrift.models.result import ModelResponse
 
 from .base import Provider
-from .resilience import ResilienceExecutor
+from .resilience import RequestBudget, ResilienceExecutor
 
 
 class OllamaProvider(Provider):
@@ -20,6 +20,7 @@ class OllamaProvider(Provider):
         executor: ResilienceExecutor | None = None,
         clock: Callable[[], float] = time.perf_counter,
         sleeper: Callable[[float], None] = time.sleep,
+        budget: RequestBudget | None = None,
     ):
         self.config = config
         self.executor = executor or ResilienceExecutor(
@@ -27,6 +28,7 @@ class OllamaProvider(Provider):
             provider_name="Ollama",
             clock=clock,
             sleeper=sleeper,
+            budget=budget,
         )
 
     def complete(self, prompt: str, *, temperature: float, max_output_tokens: int) -> ModelResponse:

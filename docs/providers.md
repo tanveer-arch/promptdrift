@@ -185,7 +185,26 @@ provider:
 
 OpenAI-compatible, Anthropic and Ollama adapters normalize malformed response payloads into safe `ProviderError`s rather than treating missing text as a successful empty answer. The engine records optional provider-returned resolved model IDs/system fingerprints as hashes, without assuming they prove a model update. OpenAI-compatible and Anthropic cost is unknown unless future explicit pricing is implemented; configured cost limits therefore cannot silently pass.
 
-Timeouts are currently fixed at 60 seconds (OpenAI) and 90 seconds (Ollama). Calls are sequential with no automatic retries. Repeated monitoring probes are explicitly budgeted observations, not hidden retries. No hosted provider was exercised by the offline test suite.
+Timeouts are currently fixed at 60 seconds (OpenAI) and 90 seconds (Ollama). Calls are sequential. Transient failures are retried only when `resilience.max_retries` is above `0`. Repeated monitoring probes are explicitly budgeted observations, not hidden retries. No hosted provider was exercised by the offline test suite.
+
+## Retries and request budget
+
+`provider.resilience.request_budget` caps the number of provider attempts in one `test`, `baseline` or `monitor` run. It is unset (unlimited) by default.
+
+- Every attempt counts, including each retry. In `monitor`, all samples of all cases and their retries share one budget.
+- Before any call, a run whose planned requests (cases, or cases × samples) exceed the budget is rejected.
+- During the run, an attempt is reserved just before it is made. When the budget is used up, no further attempt or retry backoff happens and the run stops with `ProviderBudgetExceededError` (exit code `3`), for example: `Request budget of 3 exhausted after 3 provider attempts (2 were retries). Increase provider.resilience.request_budget or lower max_retries/samples.`
+- `monitor` reports this error instead of a partial report; it is never counted as a `provider_error` probe or as drift.
+- The mock provider counts each call (it never retries), so budgets behave the same in offline tests.
+
+```yaml
+provider:
+  type: openai
+  model: gpt-4o-mini
+  resilience:
+    max_retries: 2
+    request_budget: 30   # e.g. 5 cases × 3 samples, plus room for 15 retries
+```
 
 ## Adding a Custom Provider
 

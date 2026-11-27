@@ -18,7 +18,7 @@ from promptdrift.errors import ConfigError, ProviderBudgetExceededError, Provide
 from promptdrift.models import BaselineTest, Config, TestCase
 from promptdrift.models.monitor import Diagnosis, MonitorCase, MonitorReport, SampleResult
 from promptdrift.models.provenance import Provenance
-from promptdrift.providers import create_provider
+from promptdrift.providers import RequestBudget, create_provider
 from promptdrift.storage.snapshots import save_snapshot, snapshot_from_report
 from promptdrift.templates import render_prompt
 
@@ -184,7 +184,9 @@ def monitor_suite(
             f"Planned requests ({planned_requests}) exceed request budget ({request_budget})"
         )
 
-    provider = create_provider(active.provider)
+    # Samples and their retries share one budget for the whole run.
+    budget = RequestBudget(request_budget) if request_budget is not None else None
+    provider = create_provider(active.provider, budget=budget)
     results = []
     for test, prompt, provenance in prepared:
         old = baseline.tests.get(test.id)
@@ -202,6 +204,9 @@ def monitor_suite(
                     temperature=active.defaults.temperature,
                     max_output_tokens=active.defaults.max_output_tokens,
                 )
+            except ProviderBudgetExceededError:
+                # Stop the run: exhaustion is neither drift nor a provider outage.
+                raise
             except ProviderError:
                 errors += 1
                 samples_detail.append(

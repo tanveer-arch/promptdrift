@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `contains_all` and `contains_any` assertions that take a list of substrings (#61).
 
 ### Fixed
+- `provider.resilience.request_budget` now counts every provider attempt, retries included, shared across a run's cases and monitor samples; exhaustion stops the run with an actionable `ProviderBudgetExceededError` instead of exceeding the limit (#57).
 - Isolated tests from the real home directory and working tree.
 - Corrupt baselines and empty suites no longer become silent green checks; baseline creation preflights overwrite protection and refuses failed contracts without explicit approval.
 - Unified YAML/promoted-scenario suite resolution; acceptance always evaluates the full suite. Conservative Git filtering no longer skips cases when configuration/code paths also change.

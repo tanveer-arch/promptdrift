@@ -11,7 +11,7 @@ from promptdrift.evaluators import evaluate_assertion
 from promptdrift.models import Config, RegressionReport, TestRun
 from promptdrift.models.result import EvaluationResult, ModelResponse
 from promptdrift.models.test import TestCase
-from promptdrift.providers import create_provider
+from promptdrift.providers import RequestBudget, create_provider
 from promptdrift.templates import render_prompt
 
 
@@ -86,7 +86,9 @@ def run_suite(config: Config, config_path: Path) -> RegressionReport:
         raise ProviderBudgetExceededError(
             f"Planned requests ({len(prepared)}) exceed request budget ({request_budget})"
         )
-    provider = create_provider(config.provider)
+    # One budget per run; retries are counted as they happen, not only planned requests.
+    budget = RequestBudget(request_budget) if request_budget is not None else None
+    provider = create_provider(config.provider, budget=budget)
     runs: list[TestRun] = []
     for test, prompt in prepared:
         response = provider.complete(
