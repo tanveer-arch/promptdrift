@@ -1,0 +1,49 @@
+version: 1
+provider:
+  type: mock
+  model: local-echo
+tests:
+  - id: support_refund_agent
+    prompt: prompts/support.txt
+    variables:
+      customer_id: "cust_123"
+      issue: "My order arrived damaged, can I get a refund?"
+    request_envelope:
+      version: 1
+      system: "You are a customer support agent. Validate orders before processing refunds."
+      tools:
+        - name: lookup_order
+          description: "Look up order details and fulfillment status by order ID."
+          parameters:
+            type: object
+            properties:
+              order_id:
+                type: string
+            required:
+              - order_id
+        - name: process_refund
+          description: "Issue a refund for a valid order."
+          parameters:
+            type: object
+            properties:
+              order_id:
+                type: string
+              amount_usd:
+                type: number
+              reason:
+                type: string
+            required:
+              - order_id
+              - amount_usd
+      retrieval_context:
+        knowledge_base_articles:
+          - doc_id: "kb_returns_001"
+            chunk_hash: "a1b2c3d4e5f60718"
+            title: "Damaged Goods Refund Policy"
+        ranking_cutoff: 0.82
+      uncaptured:
+        - "vector_db_index_version"
+        - "client_device_locale"
+    assertions:
+      - type: contains
+        value: "refund"

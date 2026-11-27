@@ -17,6 +17,7 @@ from promptdrift.models.test import RequestEnvelope
 
 def envelope(**overrides):
     data = {
+        "version": 1,
         "system": "You are a support agent.",
         "tools": [
             {
@@ -33,6 +34,7 @@ def envelope(**overrides):
             }
         ],
         "retrieval_context": {"policy": {"refund_days": 30, "region": "EU"}, "faq": ["a", "b"]},
+        "uncaptured": [],
     }
     data.update(overrides)
     return RequestEnvelope.model_validate(data)
@@ -85,6 +87,7 @@ def test_hashes_ignore_key_order_including_nested():
         ("system", "You are a billing agent."),
         ("tools", [{"name": "lookup_order", "description": "Find an order."}]),
         ("retrieval_context", {"policy": {"refund_days": 14, "region": "EU"}, "faq": ["a", "b"]}),
+        ("uncaptured", ["vector_db_partition"]),
     ],
 )
 def test_each_component_changes_only_its_own_hash(component, value):
@@ -245,3 +248,75 @@ def test_adding_an_envelope_after_baselining_is_reported(tmp_path):
     case = monitor_suite(config, path, samples=2).tests[0]
     assert case.diagnosis == "prompt_changed"
     assert "request_envelope was added since the accepted baseline." in case.evidence
+
+
+def test_uncaptured_declaration_order_does_not_affect_hash():
+    first = envelope(uncaptured=["ranking_algorithm", "embedding_model"])
+    second = envelope(uncaptured=["embedding_model", "ranking_algorithm"])
+    assert envelope_hashes(first) == envelope_hashes(second)
+
+
+def test_rag_retrieval_chunk_variations_alter_hash():
+    kb_v1 = {"chunks": [{"id": "c1", "content": "Refund within 30 days."}]}
+    kb_v2 = {"chunks": [{"id": "c1", "content": "Refund within 14 days."}]}
+    h1 = envelope_hashes(envelope(retrieval_context=kb_v1))
+    h2 = envelope_hashes(envelope(retrieval_context=kb_v2))
+    assert h1["retrieval_context"] != h2["retrieval_context"]
+    assert h1["tools"] == h2["tools"]
+    assert h1["system"] == h2["system"]
+    assert h1["uncaptured"] == h2["uncaptured"]
+
+
+def test_monitor_evidence_reports_uncaptured_drift(tmp_path):
+    config, path = configured(tmp_path, envelope(uncaptured=["a"]).model_dump(mode="json"))
+    write_baseline(tmp_path / config.baseline.path, run_suite(config, path))
+    config.tests[0].request_envelope = envelope(uncaptured=["b"])
+    case = monitor_suite(config, path, samples=2).tests[0]
+    assert case.diagnosis == "prompt_changed"
+    envelope_evidence = [item for item in case.evidence if "request_envelope" in item]
+    assert envelope_evidence == ["request_envelope.uncaptured differs from the accepted baseline."]
+
+
+def test_monitor_evidence_reports_retrieval_context_drift(tmp_path):
+    config, path = configured(
+        tmp_path, envelope(retrieval_context={"doc": "v1"}).model_dump(mode="json")
+    )
+    write_baseline(tmp_path / config.baseline.path, run_suite(config, path))
+    config.tests[0].request_envelope = envelope(retrieval_context={"doc": "v2"})
+    case = monitor_suite(config, path, samples=2).tests[0]
+    assert case.diagnosis == "prompt_changed"
+    envelope_evidence = [item for item in case.evidence if "request_envelope" in item]
+    assert envelope_evidence == [
+        "request_envelope.retrieval_context differs from the accepted baseline."
+    ]
+
+
+def test_comparable_vs_confounded_drift_attribution(tmp_path):
+    # Setup test with envelope
+    env = envelope()
+    config, path = configured(tmp_path, env.model_dump(mode="json"))
+    write_baseline(tmp_path / config.baseline.path, run_suite(config, path))
+
+    # Comparable run: envelope and prompt are identical
+    comparable_case = monitor_suite(config, path, samples=2).tests[0]
+    assert comparable_case.diagnosis == "stable"
+
+    # Confounded run: tool signature changed
+    config.tests[0].request_envelope = envelope(
+        tools=[
+            {
+                "name": "lookup_order",
+                "description": "Find order with customer ID.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "order_id": {"type": "string"},
+                        "customer_id": {"type": "string"},
+                    },
+                },
+            }
+        ]
+    )
+    confounded_case = monitor_suite(config, path, samples=2).tests[0]
+    assert confounded_case.diagnosis == "prompt_changed"
+    assert "request_envelope.tools differs from the accepted baseline." in confounded_case.evidence

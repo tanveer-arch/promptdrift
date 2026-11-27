@@ -13,7 +13,7 @@ from promptdrift.models.provenance import Provenance
 from promptdrift.models.result import ModelResponse
 from promptdrift.models.test import RequestEnvelope
 
-ENVELOPE_COMPONENTS = ("system", "tools", "retrieval_context")
+ENVELOPE_COMPONENTS = ("system", "tools", "retrieval_context", "uncaptured")
 # Exact matches after lowercasing and removing "-"/"_"; substrings would catch e.g. max_tokens.
 CREDENTIAL_KEYS = frozenset(
     {
@@ -66,6 +66,7 @@ def envelope_hashes(envelope: RequestEnvelope | None) -> dict[str, str] | None:
     data = strip_credentials(envelope.model_dump(mode="json"))
     # Names are unique, so name order is unambiguous; lists inside parameters keep their order.
     data["tools"] = sorted(data["tools"], key=lambda tool: tool["name"])
+    data["uncaptured"] = sorted(data.get("uncaptured", []))
     return {component: digest(data[component]) for component in ENVELOPE_COMPONENTS}
 
 
