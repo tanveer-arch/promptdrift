@@ -8,7 +8,16 @@ from pathlib import Path
 import pytest
 
 from promptdrift.errors import PromptDriftError
-from promptdrift.models import Config, ObservationSnapshot, RegressionReport, TestRun
+from promptdrift.models import (
+    Config,
+    EvaluationResult,
+    ObservationSnapshot,
+    RegressionReport,
+    TestRun,
+)
+from promptdrift.models import (
+    TestCase as ConfigTestCase,
+)
 from promptdrift.models.provenance import Provenance
 from promptdrift.storage.snapshots import (
     load_snapshot,
@@ -89,6 +98,41 @@ def test_snapshot_projection_drops_regression_payloads():
 
     assert "secret prompt" not in serialized
     assert "secret response" not in serialized
+
+
+def test_snapshot_projection_does_not_persist_tool_argument_values():
+    config = Config(
+        provider={"type": "mock", "model": "echo"},
+        tests=[ConfigTestCase(id="case", prompt="prompt.txt")],
+    )
+    report = RegressionReport(
+        provider="mock",
+        model="echo",
+        tests=[
+            TestRun(
+                test_id="case",
+                provider="mock",
+                model="echo",
+                input="prompt",
+                output="done",
+                latency_ms=1,
+                evaluations=[
+                    EvaluationResult(
+                        passed=False,
+                        assertion="lookup_order",
+                        expected={"type": "object"},
+                        actual={"tool": "lookup_order", "argument_error": "required"},
+                        reason="schema failed",
+                    )
+                ],
+            )
+        ],
+    )
+
+    serialized = snapshot_from_report(report, config, ["case"], source="check").model_dump_json()
+
+    assert "argument_error" not in serialized
+    assert "PRIVATE_TOOL_ARGUMENT" not in serialized
 
 
 @pytest.mark.parametrize(

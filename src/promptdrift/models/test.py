@@ -25,6 +25,9 @@ ASSERTION_TYPES = {
     "max_tokens",
     "latency_ms",
     "cost_usd",
+    "tool_called",
+    "tool_arguments_schema",
+    "no_tool_called",
 }
 
 
@@ -45,6 +48,9 @@ class Assertion(BaseModel):
         "max_tokens",
         "latency_ms",
         "cost_usd",
+        "tool_called",
+        "tool_arguments_schema",
+        "no_tool_called",
     ]
     value: Any | None = None
     schema_: dict[str, Any] | None = Field(default=None, alias="schema")
@@ -62,7 +68,33 @@ class Assertion(BaseModel):
             except SchemaError as exc:
                 raise ValueError("Invalid JSON schema") from exc
             _check_local_references(self.schema_)
-        if self.type not in {"json_valid", "json_schema"} and self.value is None:
+        if self.type == "tool_called" and not self.name:
+            raise ValueError("tool_called assertions require a tool name")
+        if self.type == "tool_arguments_schema":
+            if not self.name:
+                raise ValueError("tool_arguments_schema assertions require a tool name")
+            if self.schema_ is None:
+                raise ValueError("tool_arguments_schema assertions require a schema")
+            try:
+                validator_for(self.schema_).check_schema(self.schema_)
+            except SchemaError as exc:
+                raise ValueError("Invalid JSON schema") from exc
+            _check_local_references(self.schema_)
+        if self.type == "no_tool_called" and (
+            self.name is not None or self.schema_ is not None or self.value is not None
+        ):
+            raise ValueError("no_tool_called assertions do not accept a name, schema, or value")
+        if (
+            self.type
+            not in {
+                "json_valid",
+                "json_schema",
+                "tool_called",
+                "tool_arguments_schema",
+                "no_tool_called",
+            }
+            and self.value is None
+        ):
             raise ValueError(f"{self.type} assertions require a value")
         if self.type in {"contains_all", "contains_any"} and (
             not isinstance(self.value, list)

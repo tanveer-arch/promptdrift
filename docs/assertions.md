@@ -125,6 +125,46 @@ Passes if the output is valid JSON **and** conforms to the given [JSON Schema](h
 
 **Use case:** Validating structured LLM responses — required fields, types, enums, nested objects.
 
+## Tool-Calling Assertions
+
+### `tool_called`
+
+Passes when the model calls at least one tool with the specified name. Multiple
+tool calls are supported.
+
+```yaml
+- type: tool_called
+  name: lookup_order
+```
+
+### `tool_arguments_schema`
+
+Passes when every call to the specified tool has arguments that conform to the
+provided JSON Schema. Arguments may be provider-native objects or JSON strings;
+malformed JSON fails the assertion.
+
+```yaml
+- type: tool_arguments_schema
+  name: lookup_order
+  schema:
+    type: object
+    required: [order_id]
+    properties:
+      order_id: {type: string}
+```
+
+### `no_tool_called`
+
+Passes only when the model emits no tool calls.
+
+```yaml
+- type: no_tool_called
+```
+
+Tool arguments remain in the in-memory provider response for evaluation only.
+Reports, snapshots, and monitoring artifacts record tool names and validation
+summaries, never argument payload values.
+
 ## Length Assertions
 
 ### `min_length`

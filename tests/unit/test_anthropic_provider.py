@@ -96,6 +96,27 @@ class TestAnthropicProvider:
         assert response.input_tokens == 7
         assert response.output_tokens == 4
 
+    def test_extracts_tool_use_blocks_without_text(self, monkeypatch):
+        patch_post(
+            monkeypatch,
+            payload={
+                "model": "claude-test-model",
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "id": "tool-1",
+                        "name": "lookup_order",
+                        "input": {"order_id": "A-1"},
+                    }
+                ],
+                "usage": {"input_tokens": 1, "output_tokens": 2},
+            },
+        )
+        response = run(make_provider(monkeypatch))
+        assert response.output == ""
+        assert response.tool_calls[0].name == "lookup_order"
+        assert response.tool_calls[0].arguments == {"order_id": "A-1"}
+
     def test_custom_base_url(self, monkeypatch):
         captured: dict = {}
         patch_post(monkeypatch, payload=load_fixture("success.json"), captured=captured)

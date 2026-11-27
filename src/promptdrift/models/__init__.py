@@ -1,7 +1,7 @@
 from .baseline import Baseline, BaselineDistribution, BaselineTest
 from .capture import Interaction, Scenario, ScenarioLibrary
 from .config import Config, ProviderConfig, ResilienceConfig, StorageConfig
-from .result import EvaluationResult, ModelResponse, RegressionReport, TestRun
+from .result import EvaluationResult, ModelResponse, RegressionReport, TestRun, ToolCall
 from .snapshot import ObservationSnapshot, SnapshotCase
 from .test import Assertion, Evaluator, TestCase
 
@@ -23,6 +23,7 @@ __all__ = [
     "StorageConfig",
     "TestCase",
     "TestRun",
+    "ToolCall",
     "ObservationSnapshot",
     "SnapshotCase",
 ]

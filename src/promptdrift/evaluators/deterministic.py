@@ -114,6 +114,73 @@ def evaluate_assertion(assertion: Assertion, response: ModelResponse) -> Evaluat
             )
         except Unresolvable as exc:
             raise EvaluationError("JSON schema references could not be resolved locally.") from exc
+    if kind == "tool_called":
+        names = [call.name for call in response.tool_calls]
+        passed = assertion.name in names
+        return _result(
+            assertion,
+            passed,
+            assertion.name,
+            names,
+            f"Tool '{assertion.name}' was called."
+            if passed
+            else f"Tool '{assertion.name}' was not called.",
+        )
+    if kind == "tool_arguments_schema":
+        matching = [call for call in response.tool_calls if call.name == assertion.name]
+        if not matching:
+            return _result(
+                assertion,
+                False,
+                assertion.name,
+                [call.name for call in response.tool_calls],
+                f"Tool '{assertion.name}' was not called.",
+            )
+        for call in matching:
+            arguments = call.arguments
+            if isinstance(arguments, str):
+                try:
+                    arguments = json.loads(arguments)
+                except json.JSONDecodeError as exc:
+                    return _result(
+                        assertion,
+                        False,
+                        assertion.schema_,
+                        {"tool": call.name, "argument_error": "malformed JSON"},
+                        f"Tool '{call.name}' arguments are invalid JSON: {exc.msg}.",
+                    )
+            try:
+                validate(arguments, assertion.schema_, registry=Registry())
+            except ValidationError as exc:
+                location = ".".join(str(item) for item in exc.absolute_path) or "<root>"
+                return _result(
+                    assertion,
+                    False,
+                    assertion.schema_,
+                    {"tool": call.name, "argument_error": exc.validator},
+                    f"Tool '{call.name}' arguments failed schema validation at "
+                    f"{location}: {exc.validator}.",
+                )
+            except Unresolvable as exc:
+                raise EvaluationError(
+                    "Tool argument schema references could not be resolved locally."
+                ) from exc
+        return _result(
+            assertion,
+            True,
+            assertion.schema_,
+            {"tool": assertion.name, "call_count": len(matching)},
+            f"Arguments for tool '{assertion.name}' match the required schema.",
+        )
+    if kind == "no_tool_called":
+        names = [call.name for call in response.tool_calls]
+        return _result(
+            assertion,
+            not names,
+            [],
+            names,
+            "No tools were called." if not names else f"Unexpected tool calls: {names}.",
+        )
     if kind in {"min_length", "max_length"}:
         actual, expected = len(text), int(value)
         passed = actual >= expected if kind == "min_length" else actual <= expected
