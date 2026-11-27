@@ -43,6 +43,24 @@ class TestExactMatch:
         result = evaluate_assertion(Assertion(type="exact_match", value=""), response(""))
         assert result.passed
 
+    def test_matches_unquoted_integer_value(self):
+        result = evaluate_assertion(
+            Assertion(type="exact_match", value=42), response("42")
+        )
+        assert result.passed
+
+    def test_matches_unquoted_float_value(self):
+        result = evaluate_assertion(
+            Assertion(type="exact_match", value=3.14), response("3.14")
+        )
+        assert result.passed
+
+    def test_matches_quoted_numeric_string(self):
+        result = evaluate_assertion(
+            Assertion(type="exact_match", value="42"), response("42")
+        )
+        assert result.passed
+
 
 # --- contains ---
 
