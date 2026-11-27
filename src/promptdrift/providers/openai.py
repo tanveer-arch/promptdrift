@@ -55,7 +55,7 @@ class OpenAIProvider(Provider):
             )
             response.raise_for_status()
             payload = response.json()
-            usage = payload.get("usage", {})
+            usage = payload.get("usage") or {}
             output = payload["choices"][0]["message"]["content"]
             if not isinstance(output, str):
                 raise ValueError("Expected a text completion")
