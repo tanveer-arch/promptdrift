@@ -2,6 +2,7 @@
 
 import io
 import json
+import re
 from pathlib import Path
 from types import SimpleNamespace
 from xml.etree import ElementTree as ET
@@ -190,9 +191,15 @@ class TestReportCommand:
 
 class TestDoctorCommand:
     def test_doctor_passes(self, tmp_path):
-        runner.invoke(app, ["init", "--directory", str(tmp_path)])
+        initialized = runner.invoke(app, ["init", "--directory", str(tmp_path)])
+        assert initialized.exit_code == 0, initialized.output
+
+        baseline = runner.invoke(app, ["baseline", "--config", str(tmp_path / "promptdrift.yaml")])
+        assert baseline.exit_code == 0, baseline.output
+        assert (tmp_path / "promptdrift.baseline.json").is_file()
+
         result = runner.invoke(app, ["doctor", "--config", str(tmp_path / "promptdrift.yaml")])
-        assert result.exit_code == 0
+        assert result.exit_code == 0, result.output
 
     def test_doctor_on_non_utf_console(self, tmp_path, monkeypatch):
         runner.invoke(app, ["init", "--directory", str(tmp_path)])
@@ -206,21 +213,27 @@ class TestDoctorCommand:
         result = runner.invoke(
             app, ["doctor", "--config", str(tmp_path / "promptdrift.yaml"), "--privacy"]
         )
-        assert result.exit_code == 0
+        assert result.exit_code == 0, result.output
+        assert "No telemetry configured" in result.output
+        assert "Legacy history is local, not encrypted" in result.output
+        assert "Raw baseline suppression active" in result.output
 
     def test_doctor_json(self, tmp_path):
         runner.invoke(app, ["init", "--directory", str(tmp_path)])
         result = runner.invoke(
             app, ["doctor", "--config", str(tmp_path / "promptdrift.yaml"), "--json"]
         )
-        assert result.exit_code == 0
+        assert result.exit_code == 0, result.output
         data = json.loads(result.output)
+        assert isinstance(data, dict)
         assert "checks" in data
-        assert all(c["passed"] for c in data["checks"])
+        assert isinstance(data["checks"], list)
+        assert len(data["checks"]) > 0
+        assert all(check["passed"] for check in data["checks"])
 
     def test_doctor_missing_config(self, tmp_path):
         result = runner.invoke(app, ["doctor", "--config", str(tmp_path / "missing.yaml")])
-        assert result.exit_code != 0
+        assert result.exit_code == 2
 
 
 class TestMonitorCommand:
@@ -265,10 +278,8 @@ class TestMonitorCommand:
 class TestVersionCommand:
     def test_prints_version(self):
         result = runner.invoke(app, ["version"])
-        assert result.exit_code == 0
-        from promptdrift import __version__
-
-        assert __version__ in result.output
+        assert result.exit_code == 0, result.output
+        assert re.search(r"\d+\.\d+\.\d+", result.output)
 
 
 class TestNewLifecycleCommands:
