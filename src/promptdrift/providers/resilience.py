@@ -5,6 +5,7 @@ from __future__ import annotations
 import email.utils
 import time
 from collections.abc import Callable
+from typing import Any
 
 import httpx
 
@@ -198,5 +199,52 @@ class ResilienceExecutor:
                         ) from exc
 
                 self.sleeper(delay)
+
+        raise ProviderError(f"{self.provider_name} request failed: max retries exhausted")
+
+    async def aexecute(
+        self,
+        afn: Callable[[float], Any],
+        start_time: float | None = None,
+        asleeper: Callable[[float], Any] | None = None,
+    ) -> ModelResponse:
+        import asyncio
+
+        if start_time is None:
+            start_time = self.clock()
+
+        sleep_func = asleeper if asleeper is not None else asyncio.sleep
+
+        max_attempts = 1 + self.config.max_retries
+        for attempt in range(max_attempts):
+            self.attempts_made += 1
+            elapsed = self.clock() - start_time
+            if self.config.timeout_budget is not None:
+                remaining_budget = self.config.timeout_budget - elapsed
+                if remaining_budget <= 0:
+                    raise ProviderTimeoutError(
+                        f"{self.provider_name} request failed: timeout budget of {self.config.timeout_budget}s exceeded"
+                    )
+                current_timeout = min(self.config.timeout, remaining_budget)
+            else:
+                current_timeout = self.config.timeout
+
+            try:
+                return await afn(current_timeout)
+            except Exception as exc:
+                err, is_retryable, retry_after = classify_error(exc, self.provider_name)
+                is_last_attempt = attempt >= max_attempts - 1
+                if not is_retryable or is_last_attempt:
+                    raise err from exc
+
+                delay = calculate_backoff(attempt, self.config, retry_after)
+                elapsed_now = self.clock() - start_time
+                if self.config.timeout_budget is not None:
+                    if elapsed_now + delay >= self.config.timeout_budget:
+                        raise ProviderTimeoutError(
+                            f"{self.provider_name} request failed: timeout budget of {self.config.timeout_budget}s exceeded"
+                        ) from exc
+
+                await sleep_func(delay)
 
         raise ProviderError(f"{self.provider_name} request failed: max retries exhausted")

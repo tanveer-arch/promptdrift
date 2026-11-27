@@ -74,3 +74,49 @@ class OpenAIProvider(Provider):
         res = self.executor.execute(_attempt, start_time=start)
         res.latency_ms = round((self.executor.clock() - start) * 1000, 2)
         return res
+
+    async def acomplete(
+        self, prompt: str, *, temperature: float, max_output_tokens: int
+    ) -> ModelResponse:
+        env_name = self.config.api_key_env or "OPENAI_API_KEY"
+        api_key = os.environ.get(env_name)
+        if not api_key:
+            raise ProviderAuthError(
+                f"{env_name} is not set. Set it before using the OpenAI provider."
+            )
+        start = self.executor.clock()
+
+        async def _attempt(timeout: float) -> ModelResponse:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(
+                    (self.config.base_url or "https://api.openai.com/v1").rstrip("/")
+                    + "/chat/completions",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json={
+                        "model": self.config.model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": temperature,
+                        "max_tokens": max_output_tokens,
+                    },
+                )
+                response.raise_for_status()
+                payload = response.json()
+                usage = payload.get("usage", {})
+                output = payload["choices"][0]["message"]["content"]
+                if not isinstance(output, str):
+                    raise ValueError("Expected a text completion")
+                return ModelResponse(
+                    output=output,
+                    input_tokens=usage.get("prompt_tokens"),
+                    output_tokens=usage.get("completion_tokens"),
+                    latency_ms=round((self.executor.clock() - start) * 1000, 2),
+                    model=self.config.model,
+                    provider="openai",
+                    resolved_model=payload.get("model"),
+                    system_fingerprint=payload.get("system_fingerprint"),
+                    estimated_cost_usd=None,
+                )
+
+        res = await self.executor.aexecute(_attempt, start_time=start)
+        res.latency_ms = round((self.executor.clock() - start) * 1000, 2)
+        return res

@@ -28,3 +28,8 @@ class MockProvider(Provider):
             provider="mock",
             estimated_cost_usd=0.0,
         )
+
+    async def acomplete(
+        self, prompt: str, *, temperature: float, max_output_tokens: int
+    ) -> ModelResponse:
+        return self.complete(prompt, temperature=temperature, max_output_tokens=max_output_tokens)

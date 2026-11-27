@@ -92,3 +92,63 @@ class AnthropicProvider(Provider):
         res = self.executor.execute(_attempt, start_time=start)
         res.latency_ms = round((self.executor.clock() - start) * 1000, 2)
         return res
+
+    async def acomplete(
+        self, prompt: str, *, temperature: float, max_output_tokens: int
+    ) -> ModelResponse:
+        env_name = self.config.api_key_env or "ANTHROPIC_API_KEY"
+        api_key = os.environ.get(env_name)
+        if not api_key:
+            raise ProviderAuthError(
+                f"{env_name} is not set. Set it before using the Anthropic provider."
+            )
+        start = self.executor.clock()
+
+        async def _attempt(timeout: float) -> ModelResponse:
+            body = {
+                "model": self.config.model,
+                "max_tokens": max_output_tokens,
+                "temperature": temperature,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+            if self.config.system:
+                body["system"] = self.config.system
+
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(
+                    (self.config.base_url or "https://api.anthropic.com/v1").rstrip("/")
+                    + "/messages",
+                    headers={
+                        "x-api-key": api_key,
+                        "anthropic-version": ANTHROPIC_VERSION,
+                        "content-type": "application/json",
+                    },
+                    json=body,
+                )
+                response.raise_for_status()
+                payload = response.json()
+                texts = [
+                    block["text"]
+                    for block in payload.get("content", [])
+                    if isinstance(block, dict)
+                    and block.get("type") == "text"
+                    and isinstance(block.get("text"), str)
+                ]
+                if not texts:
+                    raise ProviderResponseError("Anthropic response had no text content")
+                usage = payload.get("usage") or {}
+                return ModelResponse(
+                    output="".join(texts),
+                    input_tokens=usage.get("input_tokens"),
+                    output_tokens=usage.get("output_tokens"),
+                    latency_ms=round((self.executor.clock() - start) * 1000, 2),
+                    model=self.config.model,
+                    provider="anthropic",
+                    resolved_model=payload.get("model"),
+                    system_fingerprint=None,
+                    estimated_cost_usd=None,
+                )
+
+        res = await self.executor.aexecute(_attempt, start_time=start)
+        res.latency_ms = round((self.executor.clock() - start) * 1000, 2)
+        return res

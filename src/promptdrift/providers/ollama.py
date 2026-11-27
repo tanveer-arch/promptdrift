@@ -62,3 +62,40 @@ class OllamaProvider(Provider):
         res = self.executor.execute(_attempt, start_time=start)
         res.latency_ms = round((self.executor.clock() - start) * 1000, 2)
         return res
+
+    async def acomplete(
+        self, prompt: str, *, temperature: float, max_output_tokens: int
+    ) -> ModelResponse:
+        start = self.executor.clock()
+
+        async def _attempt(timeout: float) -> ModelResponse:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(
+                    (self.config.base_url or "http://localhost:11434").rstrip("/")
+                    + "/api/generate",
+                    json={
+                        "model": self.config.model,
+                        "prompt": prompt,
+                        "stream": False,
+                        "options": {"temperature": temperature, "num_predict": max_output_tokens},
+                    },
+                )
+                response.raise_for_status()
+                payload = response.json()
+                output = payload["response"]
+                if not isinstance(output, str):
+                    raise ValueError("Expected a text completion")
+                return ModelResponse(
+                    output=output,
+                    input_tokens=payload.get("prompt_eval_count"),
+                    output_tokens=payload.get("eval_count"),
+                    latency_ms=round((self.executor.clock() - start) * 1000, 2),
+                    model=self.config.model,
+                    provider="ollama",
+                    resolved_model=payload.get("model"),
+                    estimated_cost_usd=0.0,
+                )
+
+        res = await self.executor.aexecute(_attempt, start_time=start)
+        res.latency_ms = round((self.executor.clock() - start) * 1000, 2)
+        return res

@@ -19,6 +19,7 @@ class ResilienceConfig(BaseModel):
     timeout: float = Field(default=60.0, gt=0)
     timeout_budget: float | None = Field(default=None, gt=0)
     request_budget: int | None = Field(default=None, gt=0)
+    concurrency: int = Field(default=1, ge=1, le=20)
 
 
 class ProviderConfig(BaseModel):

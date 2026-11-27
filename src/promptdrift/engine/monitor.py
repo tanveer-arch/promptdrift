@@ -12,7 +12,7 @@ from pathlib import Path
 
 from promptdrift.engine.baseline import calculate_wilson_interval, load_baseline
 from promptdrift.engine.provenance import ENVELOPE_COMPONENTS, fingerprint, with_response
-from promptdrift.engine.runner import evaluate_response, evaluation_status
+from promptdrift.engine.runner import AtomicRequestBudget, evaluate_response, evaluation_status
 from promptdrift.engine.suite import resolve_suite
 from promptdrift.errors import ConfigError, ProviderBudgetExceededError, ProviderError
 from promptdrift.models import BaselineTest, Config, TestCase
@@ -185,6 +185,34 @@ def monitor_suite(
         )
 
     provider = create_provider(active.provider)
+    concurrency = active.provider.resilience.concurrency
+
+    async_responses = None
+    if concurrency > 1 and len(prepared) * samples > 1:
+        import asyncio
+
+        async def _fetch_all_samples():
+            sem = asyncio.Semaphore(concurrency)
+            budget = AtomicRequestBudget(request_budget)
+
+            async def _fetch_one(prompt_str: str):
+                async with sem:
+                    await budget.acquire()
+                    try:
+                        return await provider.acomplete(
+                            prompt_str,
+                            temperature=active.defaults.temperature,
+                            max_output_tokens=active.defaults.max_output_tokens,
+                        )
+                    except ProviderError as err:
+                        return err
+
+            tasks = [_fetch_one(p) for _, p, _ in prepared for _ in range(1, samples + 1)]
+            return await asyncio.gather(*tasks)
+
+        all_res = asyncio.run(_fetch_all_samples())
+        async_responses = iter(all_res)
+
     results = []
     for test, prompt, provenance in prepared:
         old = baseline.tests.get(test.id)
@@ -196,24 +224,40 @@ def monitor_suite(
         observed_provenance: Provenance | None = None
         samples_detail: list[SampleResult] = []
         for sample_index in range(1, samples + 1):
-            try:
-                response = provider.complete(
-                    prompt,
-                    temperature=active.defaults.temperature,
-                    max_output_tokens=active.defaults.max_output_tokens,
-                )
-            except ProviderError:
-                errors += 1
-                samples_detail.append(
-                    SampleResult(
-                        index=sample_index,
-                        status="ERROR",
-                        output_hash=None,
-                        latency_ms=None,
-                        failed_assertions=[],
+            if async_responses is not None:
+                item = next(async_responses)
+                if isinstance(item, ProviderError):
+                    errors += 1
+                    samples_detail.append(
+                        SampleResult(
+                            index=sample_index,
+                            status="ERROR",
+                            output_hash=None,
+                            latency_ms=None,
+                            failed_assertions=[],
+                        )
                     )
-                )
-                continue
+                    continue
+                response = item
+            else:
+                try:
+                    response = provider.complete(
+                        prompt,
+                        temperature=active.defaults.temperature,
+                        max_output_tokens=active.defaults.max_output_tokens,
+                    )
+                except ProviderError:
+                    errors += 1
+                    samples_detail.append(
+                        SampleResult(
+                            index=sample_index,
+                            status="ERROR",
+                            output_hash=None,
+                            latency_ms=None,
+                            failed_assertions=[],
+                        )
+                    )
+                    continue
             evaluations = evaluate_response(test, response)
             status = evaluation_status(evaluations)
             failures += status == "FAIL"
